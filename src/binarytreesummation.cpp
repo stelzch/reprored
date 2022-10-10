@@ -5,11 +5,8 @@
 #include <cmath>
 #include <vector>
 #include "binarytreesummation.h"
-
-extern "C" {
-#include <openmpi.h>
-#include "/usr/lib/x86_64-linux-gnu/openmpi/include/mpi.h"
-}
+#include <mpi.h>
+#include <immintrin.h>
 
 
 const uint64_t parent_index(const uint64_t i) {
@@ -65,22 +62,71 @@ const uint64_t startIndex(const int rank, const size_t N, const int p) {
     }
 }
 
-double accumulate(const uint64_t index, const double *data, const size_t N) {
-    const uint64_t begin = startIndex(rank, N, clusterSize);
-    const uint64_t end = startIndex(rank + 1, N, clusterSize);
+
+inline const double sum_remaining_8tree(const uint64_t bufferStartIndex,
+        const uint64_t initialRemainingElements,
+        const int y,
+        const uint64_t maxX,
+        double *srcBuffer,
+        double *dstBuffer,
+        const uint64_t N,
+        int p) {
+    uint64_t remainingElements = initialRemainingElements;
+
+    for (int level = 0; level < 3; level++) {
+        const int stride = 1 << (y - 1 + level);
+        int elementsWritten = 0;
+        for (int i = 0; (i + 1) < remainingElements; i += 2) {
+            dstBuffer[elementsWritten++] = srcBuffer[i] + srcBuffer[i + 1];
+        }
+
+
+        if (remainingElements % 2 == 1) {
+            const uint64_t bufferIndexA = remainingElements - 1;
+            const uint64_t bufferIndexB = remainingElements;
+            const uint64_t indexB = bufferStartIndex + bufferIndexB * stride;
+            const double a = srcBuffer[bufferIndexA];
+
+            if (indexB > maxX) {
+                // indexB is the last element because the subtree ends there
+                dstBuffer[elementsWritten++] = a;
+            } else {
+                // indexB must be fetched from another rank
+                const int sourceRank = rankFromIndex(indexB, N, p);
+                double b;
+                MPI_Recv(&b, 1, MPI_DOUBLE, sourceRank, 0, MPI_COMM_WORLD, NULL);
+                printf("Receiving summand %i from %i = %f\n", indexB, sourceRank, b);
+                dstBuffer[elementsWritten++] = a + b;
+            }
+
+            remainingElements += 1;
+        }
+
+    srcBuffer = dstBuffer;
+        remainingElements /= 2;
+    }
+    assert(remainingElements == 1);
+
+    return dstBuffer[0];
+}
+
+
+
+double accumulate(const uint64_t index, double *data, const uint64_t N, const int p, const uint64_t begin, const uint64_t end) {
 
     if (index & 1) {
-        return data[idx - startIndex];
+        return data[index - begin];
     }
 
     const uint64_t maxX = (index == 0) ? N - 1
-        : min(N - 1, index + subtree_size(index) - 1);
+        : std::min(N - 1, index + subtree_size(index) - 1);
     const int maxY = (index == 0) ? ceil(log2(N)) : log2(subtree_size(index));
 
-    const uint64_t largest_local_index = min(maxX, end - 1);
+    const uint64_t largest_local_index = std::min(maxX, end - 1);
     const uint64_t n_local_elements = largest_local_index + 1 - index;
 
     uint64_t elementsInBuffer = n_local_elements;
+
     double *sourceBuffer = data;
     double *destinationBuffer = data;
 
@@ -112,11 +158,12 @@ double accumulate(const uint64_t index, const double *data, const size_t N) {
             const double a = sum_remaining_8tree(indexOfRemainingTree,
                     remainder, y, maxX,
 		    &sourceBuffer[0] + bufferIdx,
-                    &destinationBuffer[0] + bufferIdx);
+                    &destinationBuffer[0] + bufferIdx, N, p);
             destinationBuffer[elementsWritten++] = a;
         }
 
         elementsInBuffer = elementsWritten;
+        sourceBuffer = destinationBuffer;
     }
         
     assert(elementsInBuffer == 1);
@@ -124,29 +171,33 @@ double accumulate(const uint64_t index, const double *data, const size_t N) {
     return destinationBuffer[0];
 }
 
-double binary_tree_sum(const double *data, const size_t N) {
-    const ldiv_t elementsPerRank = ldiv(N, p);
+extern double binary_tree_sum(double *data, const size_t N) {
 
-    const int rank;
+    int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    const int clusterSize;
+    int clusterSize;
     MPI_Comm_size(MPI_COMM_WORLD, &clusterSize);
 
-    const uint64_t idx = startIndex(rank, N, clusterSize);
+    const ldiv_t elementsPerRank = ldiv(N, clusterSize);
+
+    const uint64_t beginIdx = startIndex(rank, N, clusterSize);
     const uint64_t endIdx = startIndex(rank + 1, N, clusterSize);
 
     // Iterate over all rank-intersecting summands on ranks > 0
-    for (; idx != 0 && idx < endIdx; idx = next_rank_intersecting_summand(idx)) {
-        double result = accumulate(idx, data, N);
+    uint64_t idx;
+    for (idx = beginIdx;
+            idx != 0 && idx < endIdx;
+            idx = next_rank_intersecting_summand(idx)) {
+        double result = accumulate(idx, data + idx - beginIdx, N, clusterSize, idx, endIdx);
         
         if (idx != 0) {
-            MPI_Send(&result, 1, MPI_DOUBLE, rankFromIndex(parent_index(idx)),
+            MPI_Send(&result, 1, MPI_DOUBLE, rankFromIndex(parent_index(idx), N, clusterSize),
                     0, MPI_COMM_WORLD);
         }
     }
 
-    double result = (rank == 0) ? accumulate(0) : 0.0;
+    double result = (rank == 0) ? accumulate(0, data, N, clusterSize, idx, endIdx) : 0.0;
     MPI_Bcast(&result, 1, MPI_DOUBLE,
             0, MPI_COMM_WORLD);
 
