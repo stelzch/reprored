@@ -66,7 +66,6 @@ int main(int argc, char** argv) {
 
 
     uint64_t start_index = startIndex(rank, data.size(), comm_size);
-    cout << "Start index of rank " << rank  << ": " << start_index << endl;
 
     double result = binary_tree_sum(&data[start_index], data.size());
 

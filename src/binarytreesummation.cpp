@@ -95,7 +95,6 @@ inline const double sum_remaining_8tree(const uint64_t bufferStartIndex,
                 const int sourceRank = rankFromIndex(indexB, N, p);
                 double b;
                 MPI_Recv(&b, 1, MPI_DOUBLE, sourceRank, 0, MPI_COMM_WORLD, NULL);
-                printf("Receiving summand %i from %i = %f\n", indexB, sourceRank, b);
                 dstBuffer[elementsWritten++] = a + b;
             }
 
