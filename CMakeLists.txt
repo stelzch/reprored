@@ -13,6 +13,7 @@ find_package(benchmark REQUIRED)
 add_compile_options(-Wall -O0 -ggdb -mavx)
 
 add_library(binarytreesummation SHARED src/binarytreesummation.cpp)
+target_include_directories(binarytreesummation PUBLIC src)
 
 add_executable(benchmark src/benchmark.cpp)
 target_link_libraries(benchmark benchmark::benchmark binarytreesummation MPI::MPI_C MPI::MPI_CXX)
