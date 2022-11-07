@@ -10,9 +10,10 @@ include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 find_package(benchmark REQUIRED)
 
-add_compile_options(-Wall -O0 -ggdb -mavx)
 
-add_library(binarytreesummation SHARED src/binarytreesummation.cpp)
+add_library(binarytreesummation STATIC src/binarytreesummation.cpp)
+
+target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
 target_include_directories(binarytreesummation PUBLIC 
      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
