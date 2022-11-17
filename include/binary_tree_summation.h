@@ -1,6 +1,7 @@
 #ifndef BINARY_TREE_SUMMATION_H_
 #define BINARY_TREE_SUMMATION_H_
 
+#include <mpi.h>
 
 /* This header file exposes functions for binary tree summation for use in C programs */
 

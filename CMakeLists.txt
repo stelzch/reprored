@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MPI REQUIRED)
-include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 find_package(benchmark REQUIRED)
 
@@ -16,7 +15,7 @@ add_library(binarytreesummation STATIC src/binary_tree.cpp src/c_wrapper.cpp)
 
 target_compile_options(binarytreesummation PRIVATE -Wall -O0 -ggdb -mavx)
 target_include_directories(binarytreesummation 
-    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> ${MPI_INCLUDE_PATH}
     PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )
 
