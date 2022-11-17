@@ -12,14 +12,17 @@ find_package(benchmark REQUIRED)
 
 
 add_definitions(-DAVX)
-add_library(binarytreesummation STATIC src/summation_strategy.cpp src/binary_tree.cpp)
+add_library(binarytreesummation STATIC src/binary_tree.cpp src/c_wrapper.cpp)
 
-target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
-target_include_directories(binarytreesummation PUBLIC 
-     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
+target_compile_options(binarytreesummation PRIVATE -Wall -O0 -ggdb -mavx)
+target_include_directories(binarytreesummation 
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+)
 
  #add_executable(benchmark src/benchmark.cpp)
  #target_link_libraries(benchmark benchmark::benchmark binarytreesummation MPI::MPI_C MPI::MPI_CXX)
  #
- #add_executable(sum src/main.cpp src/io.cpp)
- #target_link_libraries(sum binarytreesummation MPI::MPI_C MPI::MPI_CXX)
+add_executable(sum src/main.cpp src/io.cpp)
+target_link_libraries(sum binarytreesummation MPI::MPI_C MPI::MPI_CXX)
+target_compile_options(sum PRIVATE -Wall -O0 -ggdb -mavx)

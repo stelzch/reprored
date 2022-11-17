@@ -152,11 +152,14 @@ const void MessageBuffer::printStats() const {
 }
 
 
-BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> &n_summands, MPI_Comm comm)
-    : SummationStrategy(rank, n_summands, comm),
-      size(n_summands[rank]),
-      begin (startIndex[rank]),
-      end (begin + size),
+BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> n_summands, MPI_Comm comm)
+    :
+      n_summands(std::move(n_summands)),
+      rank(rank),
+      clusterSize(this->n_summands.size()),
+      globalSize(std::accumulate(this->n_summands.begin(), this->n_summands.end(), 0L)),
+      comm(comm),
+      size(this->n_summands[rank]),
       rankIntersectingSummands(calculateRankIntersectingSummands()),
       nonResidualRanks(clusterSize - (globalSize) % clusterSize),
       fairShare(floor(globalSize / clusterSize)),
@@ -168,12 +171,18 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> &n_summands,
     /* Initialize start indices map */
     int startIndex = 0;
     int rankNumber = 0;
-    for (const int& n : n_summands) {
+    for (const int& n : this->n_summands) {
+        if (rankNumber == rank) {
+            begin = startIndex;
+        }
         startIndices[startIndex] = rankNumber++;
         startIndex += n;
     }
     // guardian element
     startIndices[startIndex] = rankNumber;
+
+    end = begin + size;
+
 
     if (accumulationBuffer.size() < (size  - 8)) {
         accumulationBuffer.resize(size);
@@ -186,6 +195,9 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> &n_summands,
         MPI_Comm_size(comm, &c_size);
         assert(c_size == n_summands.size());
     }
+
+
+    rankIntersectingSummands = calculateRankIntersectingSummands();
 
 #ifdef DEBUG_OUTPUT_TREE
     printf("Rank %lu has %lu summands, starting from index %lu to %lu\n", rank, size, begin, end);
@@ -206,6 +218,10 @@ BinaryTreeSummation::~BinaryTreeSummation() {
 #endif
 }
 
+double *BinaryTreeSummation::getBuffer() {
+    return &accumulationBuffer[0];
+}
+
 const uint64_t BinaryTreeSummation::parent(const uint64_t i) {
     assert(i != 0);
 
@@ -217,43 +233,14 @@ bool BinaryTreeSummation::isLocal(uint64_t index) const {
     return (index >= begin && index < end);
 }
 
-/** Determine which rank has the number with a given index */
-uint64_t BinaryTreeSummation::rankFromIndex(uint64_t index) const {
-    int64_t rankLocalIndex = index;
-
-    for (int64_t sourceRank = 0; sourceRank < clusterSize; sourceRank++) {
-        if (rankLocalIndex < n_summands[sourceRank]) {
-            //cout << "Idx " << index << " is on rank " << sourceRank
-            //     << " with local idx " << rankLocalIndex << endl;
-
-            return sourceRank;
-        }
-
-        rankLocalIndex -= n_summands[sourceRank];
-    }
-
-
-    throw logic_error(string("Number ") + to_string(index) + " cannot be found on any node");
-}
-
 uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
     auto it = startIndices.upper_bound(index);
 
     assert(it != startIndices.end());
     const int nextRank = it->second;
+
+    cout << rank << ": " << index << " is on " << nextRank - 1 << endl;
     return nextRank - 1;
-}
-
-const double BinaryTreeSummation::acquireNumber(const uint64_t index) {
-    if (isLocal(index)) {
-        // We have that number locally
-        return summands[index - begin];
-    }
-
-    // Otherwise, receive it
-    const double result = messageBuffer.get(rankFromIndex(index), index);
-
-    return result;
 }
 
 /* Calculate all rank-intersecting summands that must be sent out because
@@ -291,7 +278,7 @@ double BinaryTreeSummation::accumulate(void) {
 
         double result = accumulate(summand);
 
-        messageBuffer.put(rankFromIndex(parent(summand)), summand, result);
+        messageBuffer.put(rankFromIndexMap(parent(summand)), summand, result);
     }
     messageBuffer.flush();
     messageBuffer.wait();
@@ -304,60 +291,10 @@ double BinaryTreeSummation::accumulate(void) {
 }
 
 
-double BinaryTreeSummation::recursiveAccumulate(uint64_t index) {
-#ifdef ENABLE_INSTRUMENTATION
-    auto t1 = std::chrono::high_resolution_clock::now();
-#endif
-
-    if (is_local_subtree_of_size(8, index)) {
-        return accumulate_local_8subtree(index);
-    }
-
-    double accumulator = acquireNumber(index);
-
-#ifdef ENABLE_INSTRUMENTATION
-    auto t2 = std::chrono::high_resolution_clock::now();
-    acquisitionDuration += t2 - t1;
-    acquisitionCount++;
-#endif
-
-#ifdef DEBUG_OUTPUT_TREE
-    if (isLocal(index))
-        printf("rk%i C%i.0 = %f\n", rank, index, accumulator);
-#endif
-
-    if (!isLocal(index)) {
-        return accumulator;
-    }
-
-    int lsb_index = ffs(index);
-    if (lsb_index == 0) {
-        // If no bits are set, iterate over all zeros
-        lsb_index = 31;
-    }
-
-    // Iterate over all variants where one of the least significant zeros
-    // has been replaced with a one.
-    for (int j = 1; j < lsb_index; j++) {
-        int zero_position = j - 1;
-        uint64_t child_index = index | (1 << zero_position);
-
-        if (child_index < globalSize) {
-            double num = recursiveAccumulate(child_index);
-            accumulator += num;
-#ifdef DEBUG_OUTPUT_TREE
-            printf("rk%i C%i.%i = C%i.%i + %f\n", rank, index, j, index, j - 1, num);
-#endif
-        }
-    }
-
-    return accumulator;
-}
-
 double BinaryTreeSummation::accumulate(const uint64_t index) {
     if (index & 1) {
         // no accumulation needed
-        return summands[index - begin];
+        return accumulationBuffer[index - begin];
     }
 
     const uint64_t maxX = (index == 0) ? globalSize - 1
@@ -369,8 +306,8 @@ double BinaryTreeSummation::accumulate(const uint64_t index) {
 
     uint64_t elementsInBuffer = n_local_elements;
 
-    double *sourceBuffer = static_cast<double *>(&summands[index - begin]);
-    double *destinationBuffer = static_cast<double *>(&accumulationBuffer[0]);
+    double *destinationBuffer = static_cast<double *>(&accumulationBuffer[index - begin]);
+    double *sourceBuffer = destinationBuffer;
 
 
     for (int y = 1; y <= maxY; y += 3) {
@@ -410,47 +347,10 @@ double BinaryTreeSummation::accumulate(const uint64_t index) {
 
         elementsInBuffer = elementsWritten;
     }
-        
+
     assert(elementsInBuffer == 1);
 
     return destinationBuffer[0];
-}
-
-double BinaryTreeSummation::nocheckAccumulate(void) {
-    assert(begin == 0);
-    assert(globalSize == end);
-
-    uint64_t maxX = globalSize - 1;
-    int maxY = ceil(log2(globalSize));
-
-    uint64_t largest_local_index = min(maxX, end - 1);
-    uint64_t n_local_elements = largest_local_index + 1;
-
-    for (size_t i = 0; i < n_local_elements; i++) {
-        accumulationBuffer[i] = summands[i];
-    }
-
-    uint64_t elementsInBuffer = n_local_elements;
-
-    for (int y = 1; y <= maxY; y++) {
-        uint64_t elementsWritten = 0;
-
-        for (uint64_t i = 0; i < elementsInBuffer; i += 2) {
-            const uint64_t indexA = (i + 0) * (1 << (y - 1));
-            const uint64_t indexB = (i + 1) * (1 << (y - 1));
-
-            const double a = accumulationBuffer[i];
-            const double b = (indexB > maxX) ? 0.0 : accumulationBuffer[i+1];
-
-            accumulationBuffer[elementsWritten++] = a + b;
-        }
-
-        elementsInBuffer = elementsWritten;
-    }
-    assert(elementsInBuffer == 1);
-
-    return accumulationBuffer[0];
-
 }
 
 const double BinaryTreeSummation::acquisitionTime(void) const {
@@ -466,57 +366,6 @@ const uint64_t BinaryTreeSummation::subtree_size(const uint64_t index) const {
     return largest_child_index(index) + 1 - index;
 }
 
-const bool BinaryTreeSummation::is_local_subtree_of_size(const uint64_t expectedSubtreeSize, const uint64_t i) const {
-    const auto lci = largest_child_index(i);
-    const auto subtreeSize = lci + 1 -i;
-    return (subtreeSize == expectedSubtreeSize && isLocal(lci));
-}
-
-const double BinaryTreeSummation::accumulate_local_8subtree(const uint64_t startIndex) const {
-    assert(isLocal(startIndex) && isLocal(largest_child_index(startIndex)));
-    const double level1a = summands[startIndex + 0 - begin] + summands[startIndex + 1 - begin];
-    const double level1b = summands[startIndex + 2 - begin] + summands[startIndex + 3 - begin];
-    const double level1c = summands[startIndex + 4 - begin] + summands[startIndex + 5 - begin];
-    const double level1d = summands[startIndex + 6 - begin] + summands[startIndex + 7 - begin];
-
-    const double level2a = level1a + level1b;
-    const double level2b = level1c + level1d;
-
-    return level2a + level2b;
-}
-
 const void BinaryTreeSummation::printStats() const {
     messageBuffer.printStats();
-}
-
-const int BinaryTreeSummation::rankFromIndexClosedForm(const uint64_t index) const {
-    if (index < splitIndex) {
-        return floor(index / fairShare);
-    } else {
-        return nonResidualRanks + ((index - splitIndex) / (fairShare + 1));
-    }
-}
-
-double BinaryTreeSummation::global_sum(const double *data, const size_t dataLength, MPI_Comm comm) {
-
-    int rank, commSize;
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &commSize);
-
-    vector<int> n_summands(commSize);
-
-    int localSize = dataLength;
-
-    /* Determine the number of summands for each rank, which is necessary to properly calculate rank numbers from indices
-     */
-    MPI_Allgather(&localSize, 1, MPI_INT,
-            &n_summands[0], 1, MPI_INT,
-            comm);
-
-    BinaryTreeSummation strategy(rank, n_summands, comm);
-
-    const vector<double> summands(data, data + dataLength);
-    strategy.setSummands(summands);
-
-    return strategy.accumulate();
 }

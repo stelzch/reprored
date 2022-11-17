@@ -1,4 +1,3 @@
-#include "summation_strategy.hpp"
 #include <cassert>
 #include <cstdint>
 #include <vector>
@@ -73,9 +72,9 @@ protected:
     MPI_Comm comm;
 };
 
-class BinaryTreeSummation : public SummationStrategy {
+class BinaryTreeSummation {
 public:
-    BinaryTreeSummation(uint64_t rank, vector<int> &n_summands, MPI_Comm comm = MPI_COMM_WORLD);
+    BinaryTreeSummation(uint64_t rank, vector<int> n_summands, MPI_Comm comm = MPI_COMM_WORLD);
 
     virtual ~BinaryTreeSummation();
 
@@ -84,13 +83,9 @@ public:
     bool isLocal(uint64_t index) const;
 
     /** Determine which rank has the number with a given index */
-    uint64_t rankFromIndex(uint64_t index) const;
     uint64_t rankFromIndexMap(const uint64_t index) const;
 
-    static double global_sum(const double *data, const size_t dataLength,
-            MPI_Comm comm = MPI_COMM_WORLD);
-
-    const double acquireNumber(const uint64_t index);
+    double *getBuffer();
 
 
     /* Sum all numbers. Will return the total sum on rank 0
@@ -108,13 +103,8 @@ public:
     const double acquisitionTime(void) const;
 
     double accumulate(uint64_t index);
-    double recursiveAccumulate(const uint64_t index);
-    double nocheckAccumulate(void);
 
     const void printStats(void) const;
-
-    const int rankFromIndexClosedForm(const uint64_t index) const;
-
 protected:
     const uint64_t largest_child_index(const uint64_t index) const;
     const uint64_t subtree_size(const uint64_t index) const;
@@ -128,7 +118,7 @@ protected:
             const uint64_t initialRemainingElements,
             const int y,
             const uint64_t maxX,
-	    double *srcBuffer,
+            double *srcBuffer,
             double *dstBuffer) {
         uint64_t remainingElements = initialRemainingElements;
 
@@ -168,8 +158,14 @@ protected:
 
 
 private:
-    const uint64_t size,  begin, end;
-    const vector<uint64_t> rankIntersectingSummands;
+    const vector<int> n_summands;
+    const int rank, clusterSize;
+    const uint64_t globalSize;
+    const int ROOT_RANK = 0;
+    const MPI_Comm comm;
+
+    uint64_t size,  begin, end;
+    vector<uint64_t> rankIntersectingSummands;
     const int nonResidualRanks;
     const uint64_t fairShare, splitIndex;
     static vector<double, AlignedAllocator<double>> accumulationBuffer;
