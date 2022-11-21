@@ -24,11 +24,10 @@ target_include_directories(binarytreesummation
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C)
+target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX)
 
- #add_executable(benchmark src/benchmark.cpp)
- #target_link_libraries(benchmark benchmark::benchmark binarytreesummation MPI::MPI_C MPI::MPI_CXX)
- #
-add_executable(sum src/main.cpp src/io.cpp)
-target_link_libraries(sum binarytreesummation MPI::MPI_C MPI::MPI_CXX)
-target_compile_options(sum PRIVATE -Wall -O0 -ggdb -mavx)
+if(BUILD_EXAMPLE_EXECUTABLE)
+    add_executable(sum src/main.cpp src/io.cpp)
+    target_link_libraries(sum PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
+    target_compile_options(sum PRIVATE -Wall -O0 -ggdb -mavx)
+endif()
