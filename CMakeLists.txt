@@ -12,13 +12,19 @@ find_package(benchmark REQUIRED)
 
 add_definitions(-DAVX)
 add_library(binarytreesummation STATIC)
-target_sources(binarytreesummation PRIVATE src/binary_tree.cpp src/c_wrapper.cpp PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
+target_sources(binarytreesummation
+    PRIVATE src/binary_tree.cpp src/c_wrapper.cpp
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
 target_compile_options(binarytreesummation PRIVATE -Wall -O0 -ggdb -mavx)
 target_include_directories(binarytreesummation 
-    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> ${MPI_INCLUDE_PATH}
-    PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C)
 
  #add_executable(benchmark src/benchmark.cpp)
  #target_link_libraries(benchmark benchmark::benchmark binarytreesummation MPI::MPI_C MPI::MPI_CXX)
