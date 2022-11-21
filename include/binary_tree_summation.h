@@ -5,14 +5,12 @@
 extern "C" {
 #endif
 
-#include <mpi.h>
-
 /* This header file exposes functions for binary tree summation for use in C programs */
 
 typedef void * ReductionContext;
 
 
-ReductionContext new_reduction_context(int local_summands, MPI_Comm);
+ReductionContext new_reduction_context(int local_summands);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);

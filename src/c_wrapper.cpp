@@ -6,7 +6,9 @@
 
 
 
-ReductionContext new_reduction_context(int local_summands, MPI_Comm comm) {
+ReductionContext new_reduction_context(int local_summands) {
+    const MPI_Comm comm = MPI_COMM_WORLD;
+
     int size, rank;
     MPI_Comm_size(comm, &size);
     MPI_Comm_rank(comm, &rank);

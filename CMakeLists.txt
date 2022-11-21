@@ -11,7 +11,7 @@ find_package(benchmark REQUIRED)
 
 
 add_definitions(-DAVX)
-add_library(binarytreesummation STATIC)
+add_library(binarytreesummation SHARED)
 target_sources(binarytreesummation
     PRIVATE src/binary_tree.cpp src/c_wrapper.cpp
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
