@@ -239,7 +239,6 @@ uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
     assert(it != startIndices.end());
     const int nextRank = it->second;
 
-    cout << rank << ": " << index << " is on " << nextRank - 1 << endl;
     return nextRank - 1;
 }
 
