@@ -51,7 +51,7 @@ void MessageBuffer::wait() {
 
 
 void MessageBuffer::flush() {
-    if(targetRank == -1) return;
+    if(targetRank == -1 || outbox.size() == 0) return;
     MPI_Request r;
     reqs.push_back(r);
 
