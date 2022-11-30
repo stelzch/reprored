@@ -11,6 +11,11 @@ typedef void * ReductionContext;
 
 
 ReductionContext new_reduction_context(int local_summands);
+
+/* TODO: remove void * type and replace with MPI_Comm. Requires MPI inclusion in every source file that includes
+ * this header, so we avoid it here
+ */
+ReductionContext new_reduction_context_comm(int local_summands, void *communicator);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);

@@ -7,7 +7,11 @@
 
 
 ReductionContext new_reduction_context(int local_summands) {
-    const MPI_Comm comm = MPI_COMM_WORLD;
+    return new_reduction_context_comm(local_summands, static_cast<void *> MPI_COMM_WORLD);
+}
+
+ReductionContext new_reduction_context_comm(int local_summands, void *communicator) {
+    MPI_Comm comm = static_cast<MPI_Comm>(communicator);
 
     int size, rank;
     MPI_Comm_size(comm, &size);
