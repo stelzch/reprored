@@ -4,10 +4,16 @@
 #include <numeric>
 #include "binary_tree.hpp"
 
+/* TODO: Remove global state. This is a crude hack. */
+MPI_Comm default_communicator = MPI_COMM_WORLD;
 
+void set_default_reduction_context_communicator(void *communicator) {
+    MPI_Comm comm = static_cast<MPI_Comm>(communicator);
+    default_communicator = comm;
+}
 
 ReductionContext new_reduction_context(int local_summands) {
-    return new_reduction_context_comm(local_summands, static_cast<void *> MPI_COMM_WORLD);
+    return new_reduction_context_comm(local_summands, static_cast<void *>(default_communicator));
 }
 
 ReductionContext new_reduction_context_comm(int local_summands, void *communicator) {
