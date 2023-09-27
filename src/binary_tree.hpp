@@ -72,9 +72,22 @@ protected:
     MPI_Comm comm;
 };
 
+typedef struct {
+    uint64_t globalStartIndex;
+    uint64_t size;
+} region;
+
 class BinaryTreeSummation {
 public:
-    BinaryTreeSummation(uint64_t rank, vector<int> n_summands, MPI_Comm comm = MPI_COMM_WORLD);
+    /** Instantiate new binary tree accumulator.
+     * For a reproducible result, the order of numbers must remain the same
+     * over different runs. This order is represented by startIndices, which
+     * contains the start index for each processor in the cluster, and
+     * globalSize, which is the total number of summands. 
+     *
+     */
+    BinaryTreeSummation(uint64_t rank, vector<region> regions,
+            MPI_Comm comm = MPI_COMM_WORLD);
 
     virtual ~BinaryTreeSummation();
 
@@ -125,7 +138,7 @@ protected:
         for (int level = 0; level < 3; level++) {
             const int stride = 1 << (y - 1 + level);
             int elementsWritten = 0;
-            for (int i = 0; (i + 1) < remainingElements; i += 2) {
+            for (uint64_t i = 0; (i + 1) < remainingElements; i += 2) {
                 dstBuffer[elementsWritten++] = srcBuffer[i] + srcBuffer[i + 1];
             }
 
@@ -158,20 +171,16 @@ protected:
 
 
 private:
-    const vector<int> n_summands;
     const int rank, clusterSize;
     const uint64_t globalSize;
-    const int ROOT_RANK = 0;
     const MPI_Comm comm;
+    const uint64_t size,  begin, end;
 
-    uint64_t size,  begin, end;
-    vector<uint64_t> rankIntersectingSummands;
-    const int nonResidualRanks;
-    const uint64_t fairShare, splitIndex;
     static vector<double, AlignedAllocator<double>> accumulationBuffer;
     std::chrono::duration<double> acquisitionDuration;
     std::map<uint64_t, int> startIndices;
     long int acquisitionCount;
+    vector<uint64_t> rankIntersectingSummands;
 
 
     MessageBuffer messageBuffer;

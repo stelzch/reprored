@@ -1,4 +1,3 @@
-#define NDEBUG
 #include <mpi.h>
 #include <iostream>
 #include <fstream>
@@ -19,7 +18,7 @@
 #include <immintrin.h>
 #endif
 
-#undef DEBUG_OUTPUT_TREE
+#define DEBUG_OUTPUT_TREE
 
 using namespace std;
 using namespace std::string_literals;
@@ -27,8 +26,9 @@ using namespace std::string_literals;
 
 const int MESSAGEBUFFER_MPI_TAG = 1;
 
-MessageBuffer::MessageBuffer(MPI_Comm comm) : targetRank(-1),
+MessageBuffer::MessageBuffer(MPI_Comm comm) :
     inbox(),
+    targetRank(-1),
     awaitedNumbers(0),
     sentMessages(0),
     sentSummands(0),
@@ -57,7 +57,7 @@ void MessageBuffer::flush() {
 
     const int messageByteSize = sizeof(MessageBufferEntry) * outbox.size();
 
-    assert(0 < targetRank < 128);
+    assert(targetRank >= 0);
     MPI_Isend(static_cast<void *>(&outbox[0]), messageByteSize, MPI_BYTE, targetRank,
             MESSAGEBUFFER_MPI_TAG, comm, &reqs.back());
     sentMessages++;
@@ -68,7 +68,7 @@ void MessageBuffer::flush() {
 }
 
 const void MessageBuffer::receive(const int sourceRank) {
-    assert(0 < sourceRank < 128);
+    assert(0 < sourceRank);
     MPI_Status status;
 
     MPI_Recv(static_cast<void *>(&buffer[0]), sizeof(MessageBufferEntry) * MAX_MESSAGE_LENGTH, MPI_BYTE,
@@ -152,38 +152,41 @@ const void MessageBuffer::printStats() const {
 }
 
 
-BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> n_summands, MPI_Comm comm)
+BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, MPI_Comm comm)
     :
-      n_summands(std::move(n_summands)),
       rank(rank),
-      clusterSize(this->n_summands.size()),
-      globalSize(std::accumulate(this->n_summands.begin(), this->n_summands.end(), 0L)),
+      clusterSize(regions.size()),
+      globalSize(std::accumulate(regions.begin(), regions.end(), 0,
+                 [](uint64_t acc, const region& r) {
+                  return acc + r.size;
+        })),
       comm(comm),
-      size(this->n_summands[rank]),
-      rankIntersectingSummands(calculateRankIntersectingSummands()),
-      nonResidualRanks(clusterSize - (globalSize) % clusterSize),
-      fairShare(floor(globalSize / clusterSize)),
-      splitIndex(nonResidualRanks * fairShare),
+      size(regions[rank].size),
+      begin(regions[rank].globalStartIndex),
+      end(begin + size),
       acquisitionDuration(std::chrono::duration<double>::zero()),
       acquisitionCount(0L),
+      rankIntersectingSummands(calculateRankIntersectingSummands()),
       messageBuffer(comm)
 {
+
     /* Initialize start indices map */
-    int startIndex = 0;
-    int rankNumber = 0;
-    for (const int& n : this->n_summands) {
-        if (rankNumber == rank) {
-            begin = startIndex;
-        }
-        startIndices[startIndex] = rankNumber++;
-        startIndex += n;
+    for (int p = 0; p < clusterSize; ++p) {
+        if (regions[p].size == 0) continue;
+        this->startIndices[regions[p].globalStartIndex] = p;
     }
     // guardian element
-    startIndices[startIndex] = rankNumber;
+    this->startIndices[globalSize] = clusterSize;
 
-    end = begin + size;
+    // Verify that the regions are actually correct.
+    // This is given if the difference to the next start index is equal to the region size
+    for (auto it = startIndices.begin(); it != startIndices.end(); ++it) {
+        auto next = std::next(it);
+        if (next == startIndices.end()) break;
 
-
+        assert(it->first + regions[it->second].size == next->first);
+    }
+    
     if (accumulationBuffer.size() < (size  - 8)) {
         accumulationBuffer.resize(size);
     }
@@ -193,11 +196,10 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<int> n_summands, 
     if (initialized) {
         int c_size;
         MPI_Comm_size(comm, &c_size);
-        assert(c_size == n_summands.size());
+        assert(c_size == regions.size());
     }
 
 
-    rankIntersectingSummands = calculateRankIntersectingSummands();
 
 #ifdef DEBUG_OUTPUT_TREE
     printf("Rank %lu has %lu summands, starting from index %lu to %lu\n", rank, size, begin, end);
@@ -248,7 +250,7 @@ uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
 vector<uint64_t> BinaryTreeSummation::calculateRankIntersectingSummands(void) const {
     vector<uint64_t> result;
 
-    if (rank == 0) {
+    if (begin == 0 || size == 0) {
         return result;
     }
 
@@ -282,9 +284,16 @@ double BinaryTreeSummation::accumulate(void) {
     messageBuffer.flush();
     messageBuffer.wait();
 
-    double result = (rank == ROOT_RANK) ? accumulate(0) : 0.0;
+    double result = 0.0;
+    const int root_rank = globalSize == 0 ? 0 : rankFromIndexMap(0);
+    if (rank == root_rank) {
+        // Start accumulation on first rank with assigned summands.
+        result = accumulate(0);
+    }
+
+
     MPI_Bcast(&result, 1, MPI_DOUBLE,
-              ROOT_RANK, comm);
+              root_rank, comm);
 
     return result;
 }

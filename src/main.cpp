@@ -9,6 +9,7 @@
 #include "binary_tree_summation.h"
 #include "io.hpp"
 #include <cmath>
+#include <cstdint>
 
 using std::cout;
 using std::cerr;
@@ -69,8 +70,7 @@ int main(int argc, char** argv) {
             } catch (std::invalid_argument) {}
         }
 
-        if (debug_this_rank)
-        printf("Debugging rank %i\n", rank);
+        if (debug_this_rank) { printf("Debugging rank %i\n", rank); }
         attach_debugger(debug_this_rank);
     }
 
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     uint64_t start = startIndices[rank];
     int length = nSummands[rank];
 
-    ReductionContext ctx = new_reduction_context(length, MPI_COMM_WORLD);
+    ReductionContext ctx = new_reduction_context_comm(static_cast<int>(start), length, MPI_COMM_WORLD);
 
     // Copy data into accumulation buffer
     for (size_t i = 0; i < length; i++) {

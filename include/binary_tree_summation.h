@@ -14,8 +14,8 @@ typedef void * ReductionContext;
  * this header, so we avoid it here
  */
 void set_default_reduction_context_communicator(void *communicator);
-ReductionContext new_reduction_context(int local_summands);
-ReductionContext new_reduction_context_comm(int local_summands, void *communicator);
+ReductionContext new_reduction_context(int global_start_idx, int local_summands);
+ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);
