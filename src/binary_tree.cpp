@@ -235,12 +235,12 @@ bool BinaryTreeSummation::isLocal(uint64_t index) const {
 }
 
 uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
+    // Get an iterator to the start index that is greater than index
     auto it = startIndices.upper_bound(index);
+    assert(it != startIndices.begin());
+    --it;
 
-    assert(it != startIndices.end());
-    const int nextRank = it->second;
-
-    return nextRank - 1;
+    return it->second;
 }
 
 /* Calculate all rank-intersecting summands that must be sent out because
