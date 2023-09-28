@@ -68,7 +68,6 @@ void MessageBuffer::flush() {
 }
 
 const void MessageBuffer::receive(const int sourceRank) {
-    assert(0 < sourceRank);
     MPI_Status status;
 
     MPI_Recv(static_cast<void *>(&buffer[0]), sizeof(MessageBufferEntry) * MAX_MESSAGE_LENGTH, MPI_BYTE,
