@@ -16,6 +16,7 @@ typedef void * ReductionContext;
 void set_default_reduction_context_communicator(void *communicator);
 ReductionContext new_reduction_context(int global_start_idx, int local_summands);
 ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator);
+void store_summand(ReductionContext context, int local_idx, double val);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);
