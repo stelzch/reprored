@@ -12,11 +12,11 @@ void set_default_reduction_context_communicator(void *communicator) {
     default_communicator = comm;
 }
 
-ReductionContext new_reduction_context(int global_start_idx, int local_summands) {
+ReductionContext __attribute__((optimize("O0"))) new_reduction_context(int global_start_idx, int local_summands) {
     return new_reduction_context_comm(global_start_idx, local_summands, static_cast<void *>(default_communicator));
 }
 
-ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator) {
+ReductionContext __attribute__((optimize("O0"))) new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator) {
     MPI_Comm comm = static_cast<MPI_Comm>(communicator);
 
     int size, rank;
@@ -36,20 +36,20 @@ ReductionContext new_reduction_context_comm(int global_start_idx, int local_summ
     return new BinaryTreeSummation(rank, std::move(regions), comm);
 }
 
-double *get_reduction_buffer(ReductionContext ctx) {
+double * __attribute__((optimize("O0"))) get_reduction_buffer(ReductionContext ctx) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
     return ptr->getBuffer();
 }
 
 
-double reproducible_reduce(ReductionContext ctx) {
+double __attribute__((optimize("O0"))) reproducible_reduce(ReductionContext ctx) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
     return ptr->accumulate();
 }
 
-void free_reduction_context(ReductionContext ctx) {
+void __attribute__((optimize("O0"))) free_reduction_context(ReductionContext ctx) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
     delete ptr;
