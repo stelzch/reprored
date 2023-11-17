@@ -1,4 +1,5 @@
 #include <vector>
+#include <stdint.h>
 #include <mpi.h>
 #include <binary_tree_summation.h>
 #include <numeric>
@@ -54,7 +55,7 @@ void __attribute__((optimize("O0"))) free_reduction_context(ReductionContext ctx
 
     delete ptr;
 }
-void __attribute__((optimize("O0"))) store_summand(ReductionContext ctx, int local_idx, double val) {
+void __attribute__((optimize("O0"))) store_summand(ReductionContext ctx, uint64_t local_idx, double val) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
     ptr->storeSummand(local_idx, val);

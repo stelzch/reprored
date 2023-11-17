@@ -1,6 +1,8 @@
 #ifndef BINARY_TREE_SUMMATION_H_
 #define BINARY_TREE_SUMMATION_H_
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,7 +18,7 @@ typedef void * ReductionContext;
 void set_default_reduction_context_communicator(void *communicator);
 ReductionContext new_reduction_context(int global_start_idx, int local_summands);
 ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator);
-void store_summand(ReductionContext context, int local_idx, double val);
+void store_summand(ReductionContext context, uint64_t local_idx, double val);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);

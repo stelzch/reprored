@@ -222,7 +222,7 @@ BinaryTreeSummation::~BinaryTreeSummation() {
 double *BinaryTreeSummation::getBuffer() {
     return accumulationBuffer.data();
 }
-void BinaryTreeSummation::storeSummand(int localIndex, double val) {
+void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
     accumulationBuffer[localIndex] = val;
 }
 

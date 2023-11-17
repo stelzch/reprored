@@ -99,7 +99,7 @@ public:
     uint64_t rankFromIndexMap(const uint64_t index) const;
 
     double *getBuffer();
-    void storeSummand(int localIndex, double val);
+    void storeSummand(uint64_t localIndex, double val);
 
 
     /* Sum all numbers. Will return the total sum on rank 0
