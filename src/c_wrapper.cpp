@@ -57,5 +57,5 @@ void __attribute__((optimize("O0"))) free_reduction_context(ReductionContext ctx
 void __attribute__((optimize("O0"))) store_summand(ReductionContext ctx, int local_idx, double val) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
-    ptr->getBuffer()[local_idx] = val;
+    ptr->storeSummand(local_idx, val);
 }
