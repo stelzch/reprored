@@ -220,7 +220,7 @@ BinaryTreeSummation::~BinaryTreeSummation() {
 }
 
 double *BinaryTreeSummation::getBuffer() {
-    return &accumulationBuffer[0];
+    return accumulationBuffer.data();
 }
 
 const uint64_t BinaryTreeSummation::parent(const uint64_t i) {
