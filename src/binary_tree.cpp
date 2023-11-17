@@ -150,7 +150,6 @@ const void MessageBuffer::printStats() const {
 
 }
 
-
 BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, MPI_Comm comm)
     :
       rank(rank),
@@ -163,6 +162,7 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, 
       size(regions[rank].size),
       begin(regions[rank].globalStartIndex),
       end(begin + size),
+      accumulationBuffer(1024),
       acquisitionDuration(std::chrono::duration<double>::zero()),
       acquisitionCount(0L),
       rankIntersectingSummands(calculateRankIntersectingSummands()),
@@ -209,8 +209,6 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, 
 #endif
 }
 
-// Initialize accumulation buffer
-vector<double, AlignedAllocator<double>> BinaryTreeSummation::accumulationBuffer(1024);
 
 BinaryTreeSummation::~BinaryTreeSummation() {
 #ifdef ENABLE_INSTRUMENTATION

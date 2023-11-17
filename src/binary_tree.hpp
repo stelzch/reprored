@@ -177,7 +177,7 @@ private:
     const MPI_Comm comm;
     const uint64_t size,  begin, end;
 
-    static vector<double, AlignedAllocator<double>> accumulationBuffer;
+    vector<double, AlignedAllocator<double>> accumulationBuffer;
     std::chrono::duration<double> acquisitionDuration;
     std::map<uint64_t, int> startIndices;
     long int acquisitionCount;
