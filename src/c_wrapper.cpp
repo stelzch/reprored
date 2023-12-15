@@ -44,10 +44,34 @@ double * __attribute__((optimize("O0"))) get_reduction_buffer(ReductionContext c
 }
 
 
+union num {
+    double val;
+    unsigned char bytes[8];
+};
+
+uint64_t reduction_counter = 0;
+
 double __attribute__((optimize("O0"))) reproducible_reduce(ReductionContext ctx) {
     auto *ptr = static_cast<BinaryTreeSummation *>(ctx);
 
-    return ptr->accumulate();
+    double result = ptr->accumulate();
+#ifdef TRACE
+    if (ptr->get_rank() == 0) {
+        union num n;
+        n.val = result;
+
+        printf("reproducible_reduce call %lu = %f (0x",
+                reduction_counter++,
+                result);
+        for (int i=0; i<8; i++) {
+            printf("%02x", n.bytes[i]);
+        }
+        printf(")\n");
+    }
+#endif
+
+
+    return result;
 }
 
 void __attribute__((optimize("O0"))) free_reduction_context(ReductionContext ctx) {

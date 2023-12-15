@@ -119,6 +119,8 @@ public:
     double accumulate(uint64_t index);
 
     const void printStats(void) const;
+
+    const int get_rank() const;
 protected:
     const uint64_t largest_child_index(const uint64_t index) const;
     const uint64_t subtree_size(const uint64_t index) const;

@@ -377,3 +377,7 @@ const uint64_t BinaryTreeSummation::subtree_size(const uint64_t index) const {
 const void BinaryTreeSummation::printStats() const {
     messageBuffer.printStats();
 }
+
+const int BinaryTreeSummation::get_rank() const {
+    return rank;
+}
