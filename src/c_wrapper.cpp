@@ -61,7 +61,7 @@ double __attribute__((optimize("O0"))) reproducible_reduce(ReductionContext ctx)
         n.val = result;
 
         printf("reproducible_reduce call %lu = %f (0x",
-                reduction_counter++,
+                reduction_counter,
                 result);
         for (int i=0; i<8; i++) {
             printf("%02x", n.bytes[i]);
@@ -71,6 +71,7 @@ double __attribute__((optimize("O0"))) reproducible_reduce(ReductionContext ctx)
 #endif
 
 
+    ++reduction_counter;
     return result;
 }
 
