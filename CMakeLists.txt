@@ -37,9 +37,11 @@ target_include_directories(binarytreesummation
 )
 
 if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
-target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX reproblas)
+    target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES})
+    target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
+    target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 else()
-target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX)
+    target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX)
 endif()
 
 if(BUILD_EXAMPLE_EXECUTABLE)
