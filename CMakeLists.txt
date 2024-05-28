@@ -10,7 +10,7 @@ find_package(MPI REQUIRED)
 find_package(benchmark REQUIRED)
 
 
-if(${REPRODUCIBLE} STREQUAL "REPROBLAS")
+if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
     list(APPEND WRAPPER_SRC src/c_wrapper_reproblas.cpp)
