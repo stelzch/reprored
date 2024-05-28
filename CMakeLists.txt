@@ -35,7 +35,12 @@ target_include_directories(binarytreesummation
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
+target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX reproblas)
+else()
 target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX)
+endif()
 
 if(BUILD_EXAMPLE_EXECUTABLE)
     add_executable(sum src/main.cpp src/io.cpp)
