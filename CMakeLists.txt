@@ -10,10 +10,21 @@ find_package(MPI REQUIRED)
 find_package(benchmark REQUIRED)
 
 
+if(${REPRODUCIBLE} STREQUAL "REPROBLAS")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
+    list(APPEND WRAPPER_SRC src/c_wrapper_reproblas.cpp)
+elseif(${REPRODUCIBLE} STREQUAL "BINARYTREESUMMATION")
+    list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree.cpp)
+else()
+    message(FATAL_ERROR "Unsupported reproducibility mode: ${REPRODUCIBLE}. Must be either REPROBLAS or BINARYTREESUMMATION")
+endif()
+
+
 add_definitions(-DAVX)
 add_library(binarytreesummation SHARED)
 target_sources(binarytreesummation
-    PRIVATE src/binary_tree.cpp src/c_wrapper.cpp
+    PRIVATE ${WRAPPER_SRC}
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
 target_compile_options(binarytreesummation PRIVATE -Wall -O0 -ggdb -mavx)
