@@ -22,12 +22,12 @@ endif()
 
 
 add_definitions(-DAVX)
-add_library(binarytreesummation SHARED)
+add_library(binarytreesummation STATIC)
 target_sources(binarytreesummation
     PRIVATE ${WRAPPER_SRC}
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall -O0 -ggdb -mavx)
+target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
 target_include_directories(binarytreesummation 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -48,5 +48,5 @@ endif()
 if(BUILD_EXAMPLE_EXECUTABLE)
     add_executable(sum src/main.cpp src/io.cpp)
     target_link_libraries(sum PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
-    target_compile_options(sum PRIVATE -Wall -O0 -ggdb -mavx)
+    target_compile_options(sum PRIVATE -Wall -O3 -ggdb -mavx)
 endif()
