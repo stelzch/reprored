@@ -166,6 +166,7 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, 
       acquisitionDuration(std::chrono::duration<double>::zero()),
       acquisitionCount(0L),
       rankIntersectingSummands(calculateRankIntersectingSummands()),
+      reduction_counter(0UL),
       messageBuffer(comm)
 {
 
@@ -294,6 +295,8 @@ double BinaryTreeSummation::accumulate(void) {
 
     MPI_Bcast(&result, 1, MPI_DOUBLE,
               root_rank, comm);
+
+    ++reduction_counter;
 
     return result;
 }

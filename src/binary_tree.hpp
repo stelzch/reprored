@@ -185,6 +185,8 @@ private:
     long int acquisitionCount;
     vector<uint64_t> rankIntersectingSummands;
 
+    volatile uint64_t reduction_counter;
+
 
     MessageBuffer messageBuffer;
 };
