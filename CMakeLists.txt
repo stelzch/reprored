@@ -7,9 +7,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MPI REQUIRED)
 
-find_package(benchmark REQUIRED)
-
-
 if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
