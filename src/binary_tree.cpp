@@ -18,8 +18,6 @@
 #include <immintrin.h>
 #endif
 
-#define DEBUG_OUTPUT_TREE
-
 using namespace std;
 using namespace std::string_literals;
 
