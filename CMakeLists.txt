@@ -11,10 +11,12 @@ if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
     list(APPEND WRAPPER_SRC src/c_wrapper_reproblas.cpp)
+elseif("${REPRODUCIBLE}" STREQUAL "ALLREDUCE")
+    list(APPEND WRAPPER_SRC src/c_wrapper_allreduce.cpp)
 elseif("${REPRODUCIBLE}" STREQUAL "BINARYTREESUMMATION")
     list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree.cpp)
 else()
-    message(FATAL_ERROR "Unsupported reproducibility mode: ${REPRODUCIBLE}. Must be either REPROBLAS or BINARYTREESUMMATION")
+    message(FATAL_ERROR "Unsupported reproducibility mode: ${REPRODUCIBLE}. Must be either REPROBLAS, ALLREDUCE or BINARYTREESUMMATION")
 endif()
 
 
