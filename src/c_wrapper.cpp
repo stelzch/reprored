@@ -18,6 +18,10 @@ ReductionContext new_reduction_context(int global_start_idx, int local_summands)
 }
 
 ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator) {
+    return new_reduction_context_comm_k(global_start_idx, local_summands, communicator, 1);
+}
+
+ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_summands, void *communicator, int k) {
     MPI_Comm comm = static_cast<MPI_Comm>(communicator);
 
     int size, rank;
@@ -34,7 +38,7 @@ ReductionContext new_reduction_context_comm(int global_start_idx, int local_summ
                   &regions[0], sizeof(region), MPI_BYTE,
                   comm);
 
-    return new BinaryTreeSummation(rank, std::move(regions), comm);
+    return new BinaryTreeSummation(rank, std::move(regions), k, comm);
 }
 
 double * get_reduction_buffer(ReductionContext ctx) {

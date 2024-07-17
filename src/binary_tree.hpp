@@ -38,6 +38,16 @@ struct AlignedAllocator
     }
 };
 
+template<typename T>
+inline T round_up_to_multiple(T x, T n) {
+    return (x % n == 0) ? x : x + n - (x % n);
+}
+
+template<typename T>
+inline T round_down_to_multiple(T x, T n) {
+    return x - (x % n);
+}
+
 const uint8_t MAX_MESSAGE_LENGTH = 4;
 
 struct MessageBufferEntry {
@@ -59,6 +69,7 @@ public:
     const void printStats(void) const;
 
 protected:
+
     array<MessageBufferEntry, MAX_MESSAGE_LENGTH> entries;
     map<uint64_t, double> inbox;
     int targetRank;
@@ -86,8 +97,8 @@ public:
      * globalSize, which is the total number of summands. 
      *
      */
-    BinaryTreeSummation(uint64_t rank, vector<region> regions,
-            MPI_Comm comm = MPI_COMM_WORLD);
+    BinaryTreeSummation(uint64_t rank, const vector<region> regions,
+            uint64_t K = 1, MPI_Comm comm = MPI_COMM_WORLD);
 
     virtual ~BinaryTreeSummation();
 
@@ -122,6 +133,9 @@ public:
 
     const int get_rank() const;
 protected:
+    void linear_sum_k();
+
+    const vector<region> calculate_k_regions(const vector<region> regions) const;
     const uint64_t largest_child_index(const uint64_t index) const;
     const uint64_t subtree_size(const uint64_t index) const;
 
@@ -174,10 +188,16 @@ protected:
 
 
 private:
+    const uint64_t k;
     const int rank, clusterSize;
+    const vector<region> k_regions;
+    const vector<region> regions;
     const uint64_t globalSize;
     const MPI_Comm comm;
+    const uint64_t k_size,  k_begin, k_end;
     const uint64_t size,  begin, end;
+    const uint64_t k_send;
+    const uint64_t k_recv;
 
     vector<double, AlignedAllocator<double>> accumulationBuffer;
     std::chrono::duration<double> acquisitionDuration;
@@ -185,7 +205,7 @@ private:
     long int acquisitionCount;
     vector<uint64_t> rankIntersectingSummands;
 
-    volatile uint64_t reduction_counter;
+    uint64_t reduction_counter;
 
 
     MessageBuffer messageBuffer;

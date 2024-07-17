@@ -10,6 +10,7 @@
 #include "io.hpp"
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 using std::cout;
 using std::cerr;
@@ -33,12 +34,18 @@ void __attribute__((optimize("O0"))) attach_debugger(bool condition) {
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << "file.binpsllh|file.psllh" << endl;
+    if (argc != 3) {
+        cerr << "Usage: " << argv[0] << "file.binpsllh|file.psllh <k>" << endl;
         return -1;
     }
 
     string filename(argv[1]);
+    int k = std::atoi(argv[2]);
+
+    if (k <= 0) {
+        cerr << "Invalid value for k: " << k << endl;
+        return -2;
+    }
 
     std::vector<double> data;
 
@@ -97,7 +104,7 @@ int main(int argc, char** argv) {
     uint64_t start = startIndices[rank];
     int length = nSummands[rank];
 
-    ReductionContext ctx = new_reduction_context_comm(static_cast<int>(start), length, MPI_COMM_WORLD);
+    ReductionContext ctx = new_reduction_context_comm_k(static_cast<int>(start), length, MPI_COMM_WORLD, k);
 
     // Copy data into accumulation buffer
     for (size_t i = 0; i < length; i++) {

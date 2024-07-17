@@ -148,18 +148,25 @@ const void MessageBuffer::printStats() const {
 
 }
 
-BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, MPI_Comm comm)
+BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> regions, uint64_t k, MPI_Comm comm)
     :
+      k(k),
       rank(rank),
       clusterSize(regions.size()),
-      globalSize(std::accumulate(regions.begin(), regions.end(), 0,
+      k_regions(calculate_k_regions(regions)),
+      globalSize(std::accumulate(k_regions.begin(), k_regions.end(), 0,
                  [](uint64_t acc, const region& r) {
                   return acc + r.size;
         })),
       comm(comm),
+      k_size(k_regions[rank].size),
+      k_begin(k_regions[rank].globalStartIndex),
+      k_end(k_begin + k_size),
       size(regions[rank].size),
       begin(regions[rank].globalStartIndex),
       end(begin + size),
+      k_send(round_up_to_multiple(begin, k) - begin),
+      k_recv(round_up_to_multiple(end, k) - end),
       accumulationBuffer(1024),
       acquisitionDuration(std::chrono::duration<double>::zero()),
       acquisitionCount(0L),
@@ -167,11 +174,12 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, 
       reduction_counter(0UL),
       messageBuffer(comm)
 {
+    assert(k > 0);
 
     /* Initialize start indices map */
     for (int p = 0; p < clusterSize; ++p) {
-        if (regions[p].size == 0) continue;
-        this->startIndices[regions[p].globalStartIndex] = p;
+        if (k_regions[p].size == 0) continue;
+        this->startIndices[k_regions[p].globalStartIndex] = p;
     }
     // guardian element
     this->startIndices[globalSize] = clusterSize;
@@ -182,11 +190,12 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, vector<region> regions, 
         auto next = std::next(it);
         if (next == startIndices.end()) break;
 
-        assert(it->first + regions[it->second].size == next->first);
+        assert(it->first + k_regions[it->second].size == next->first);
     }
     
-    if (accumulationBuffer.size() < (size  - 8)) {
-        accumulationBuffer.resize(size);
+
+    if (accumulationBuffer.size() < (regions[rank].size + k_recv)) {
+        accumulationBuffer.resize(regions[rank].size + k_recv);
     }
 
     int initialized;
@@ -231,7 +240,7 @@ const uint64_t BinaryTreeSummation::parent(const uint64_t i) {
 }
 
 bool BinaryTreeSummation::isLocal(uint64_t index) const {
-    return (index >= begin && index < end);
+    return (index >= k_begin && index < k_end);
 }
 
 uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
@@ -249,15 +258,15 @@ uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
 vector<uint64_t> BinaryTreeSummation::calculateRankIntersectingSummands(void) const {
     vector<uint64_t> result;
 
-    if (begin == 0 || size == 0) {
+    if (k_begin == 0 || k_size == 0) {
         return result;
     }
 
-    assert(begin != 0);
+    assert(k_begin != 0);
 
-    uint64_t index = begin;
-    while (index < end) {
-        assert(parent(index) < begin);
+    uint64_t index = k_begin;
+    while (index < k_end) {
+        assert(parent(index) < k_begin);
         result.push_back(index);
 
         index = index + subtree_size(index);
@@ -266,9 +275,54 @@ vector<uint64_t> BinaryTreeSummation::calculateRankIntersectingSummands(void) co
     return result;
 }
 
+const vector<region> BinaryTreeSummation::calculate_k_regions(const vector<region> regions) const {
+    vector<region> k_regions(regions.size());
+    for (auto i = 0U; i < regions.size(); ++i) {
+        k_regions[i].globalStartIndex = round_up_to_multiple(regions[i].globalStartIndex, k) / k;
+        const auto end = round_up_to_multiple(regions[i].globalStartIndex + regions[i].size, k) / k;
+        k_regions[i].size = (end - k_regions[i].globalStartIndex);
+    }
+
+        
+
+    return k_regions;
+}
+
+void BinaryTreeSummation::linear_sum_k() {
+    MPI_Request send_req;
+    if (k_send > 0) {
+        MPI_Isend(&accumulationBuffer[0], k_send, MPI_DOUBLE, rank - 1, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
+    }
+
+    // TODO: move receive before last loop iteration in order to overlap computation with communication
+    if (k_recv > 0) {
+        double *segment_to_retrieve = &accumulationBuffer[size];
+
+        if (rank + 1 < clusterSize) {
+            MPI_Status status;
+            MPI_Recv(segment_to_retrieve, k_recv, MPI_DOUBLE, rank + 1, MESSAGEBUFFER_MPI_TAG, comm, &status);
+
+            int received_count;
+            MPI_Get_count(&status, MPI_DOUBLE, &received_count);
+            assert(received_count == k_recv);
+        } else {
+            // Where are the last rank, just zero pad the memory
+            memset(segment_to_retrieve, 0, k_recv * sizeof(double));
+        }
+    }
+
+    uint64_t target_idx = 0U;
+    for (uint64_t i = k_send; i + k - 1 < size + k_recv; i += k) {
+        accumulationBuffer[target_idx++] = std::accumulate(&accumulationBuffer[i], &accumulationBuffer[i+k], 0.0);
+    }
+
+    assert(target_idx == k_size);
+}
+
 /* Sum all numbers. Will return the total sum on rank 0
     */
 double BinaryTreeSummation::accumulate(void) {
+    linear_sum_k();
     for (auto summand : rankIntersectingSummands) {
         if (subtree_size(summand) > 16) {
             // If we are about to do some considerable amount of work, make sure
@@ -303,19 +357,19 @@ double BinaryTreeSummation::accumulate(void) {
 double BinaryTreeSummation::accumulate(const uint64_t index) {
     if (index & 1) {
         // no accumulation needed
-        return accumulationBuffer[index - begin];
+        return accumulationBuffer[index - k_begin];
     }
 
     const uint64_t maxX = (index == 0) ? globalSize - 1
         : min(globalSize - 1, index + subtree_size(index) - 1);
     const int maxY = (index == 0) ? ceil(log2(globalSize)) : log2(subtree_size(index));
 
-    const uint64_t largest_local_index = min(maxX, end - 1);
+    const uint64_t largest_local_index = min(maxX, k_end - 1);
     const uint64_t n_local_elements = largest_local_index + 1 - index;
 
     uint64_t elementsInBuffer = n_local_elements;
 
-    double *destinationBuffer = static_cast<double *>(&accumulationBuffer[index - begin]);
+    double *destinationBuffer = static_cast<double *>(&accumulationBuffer[index - k_begin]);
     double *sourceBuffer = destinationBuffer;
 
 
