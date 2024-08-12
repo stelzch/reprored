@@ -153,20 +153,20 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
       k(k),
       rank(rank),
       clusterSize(regions.size()),
+      comm(comm),
+      size(regions[rank].size),
+      begin(regions[rank].globalStartIndex),
+      end(begin + size),
       k_regions(calculate_k_regions(regions)),
+      k_size(k_regions[rank].size),
+      k_begin(k_regions[rank].globalStartIndex),
+      k_end(k_begin + k_size),
+      k_left_remainder(round_up_to_multiple(begin, k) - begin),
+      k_right_remainder(end - round_down_to_multiple(end, k)),
       globalSize(std::accumulate(k_regions.begin(), k_regions.end(), 0,
                  [](uint64_t acc, const region& r) {
                   return acc + r.size;
         })),
-      comm(comm),
-      k_size(k_regions[rank].size),
-      k_begin(k_regions[rank].globalStartIndex),
-      k_end(k_begin + k_size),
-      size(regions[rank].size),
-      begin(regions[rank].globalStartIndex),
-      end(begin + size),
-      k_send(round_up_to_multiple(begin, k) - begin),
-      k_recv(round_up_to_multiple(end, k) - end),
       accumulationBuffer(1024),
       acquisitionDuration(std::chrono::duration<double>::zero()),
       acquisitionCount(0L),
@@ -175,6 +175,8 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
       messageBuffer(comm)
 {
     assert(k > 0);
+    assert(k_left_remainder < k);
+    assert(k_right_remainder < k);
 
     /* Initialize start indices map */
     for (int p = 0; p < clusterSize; ++p) {
@@ -192,10 +194,10 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
 
         assert(it->first + k_regions[it->second].size == next->first);
     }
-    
 
-    if (accumulationBuffer.size() < (regions[rank].size + k_recv)) {
-        accumulationBuffer.resize(regions[rank].size + k_recv);
+    auto desired_buffer_size = (regions[rank].size + k_right_remainder);
+    if (accumulationBuffer.size() < desired_buffer_size) {
+      accumulationBuffer.resize(desired_buffer_size);
     }
 
     int initialized;
@@ -276,44 +278,59 @@ vector<uint64_t> BinaryTreeSummation::calculateRankIntersectingSummands(void) co
 }
 
 const vector<region> BinaryTreeSummation::calculate_k_regions(const vector<region> regions) const {
-    vector<region> k_regions(regions.size());
-    for (auto i = 0U; i < regions.size(); ++i) {
-        k_regions[i].globalStartIndex = round_up_to_multiple(regions[i].globalStartIndex, k) / k;
-        const auto end = round_up_to_multiple(regions[i].globalStartIndex + regions[i].size, k) / k;
-        k_regions[i].size = (end - k_regions[i].globalStartIndex);
-    }
+    const auto last_region = std::max_element(regions.begin(), regions.end(), [] (const auto& a, const auto& b) {
+            return a.globalStartIndex < b.globalStartIndex;
+    });
 
-        
+    vector<region> k_regions;
+    k_regions.reserve(regions.size());
+
+    for (auto it = regions.begin(); it < regions.end(); ++it) {
+        const region& r = *it;
+        const auto start = round_down_to_multiple(r.globalStartIndex, k) / k;
+        auto end = round_down_to_multiple(r.globalStartIndex + r.size, k) / k;
+
+        // Additional element at the end
+        if (it == last_region && (r.globalStartIndex + r.size) % k != 0) {
+            end += 1;
+        }
+
+        k_regions.emplace_back(start, end - start);
+    }
 
     return k_regions;
 }
 
 void BinaryTreeSummation::linear_sum_k() {
     MPI_Request send_req;
-    if (k_send > 0) {
-        MPI_Isend(&accumulationBuffer[0], k_send, MPI_DOUBLE, rank - 1, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
+
+    // Sum & send right remainder
+    const bool is_last_rank = rank == clusterSize - 1;
+    if (k_right_remainder > 0 && !is_last_rank) {
+        double acc = std::accumulate(&accumulationBuffer[size - k_right_remainder], &accumulationBuffer[size], 0.0);
+        MPI_Isend(&acc, 1, MPI_DOUBLE, rank + 1, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
+    }
+    const bool has_left_remainder = (k_left_remainder > 0);
+    if (has_left_remainder) {
+        assert(rank != 0);
+        
+        double acc;
+        // TODO: move this receive call behind the loop below in order to overlap communication with computation.
+        // This requires a different buffer placement strategy, since we are reading the first `k_left_remainder` entries from the buffer
+        // which the loop below would write into.
+        MPI_Recv(&acc, 1, MPI_DOUBLE, rank - 1, MESSAGEBUFFER_MPI_TAG, comm, nullptr);
+
+        accumulationBuffer[0] = std::accumulate(&accumulationBuffer[0], &accumulationBuffer[k_left_remainder], acc);
     }
 
-    // TODO: move receive before last loop iteration in order to overlap computation with communication
-    if (k_recv > 0) {
-        double *segment_to_retrieve = &accumulationBuffer[size];
-
-        if (rank + 1 < clusterSize) {
-            MPI_Status status;
-            MPI_Recv(segment_to_retrieve, k_recv, MPI_DOUBLE, rank + 1, MESSAGEBUFFER_MPI_TAG, comm, &status);
-
-            int received_count;
-            MPI_Get_count(&status, MPI_DOUBLE, &received_count);
-            assert(received_count == k_recv);
-        } else {
-            // Where are the last rank, just zero pad the memory
-            memset(segment_to_retrieve, 0, k_recv * sizeof(double));
-        }
-    }
-
-    uint64_t target_idx = 0U;
-    for (uint64_t i = k_send; i + k - 1 < size + k_recv; i += k) {
+    uint64_t target_idx = has_left_remainder ? 1U : 0U;
+    for (uint64_t i = k_left_remainder; i + k - 1 < size - k_right_remainder; i += k) {
         accumulationBuffer[target_idx++] = std::accumulate(&accumulationBuffer[i], &accumulationBuffer[i+k], 0.0);
+    }
+
+
+    if (k_right_remainder > 0 && is_last_rank) {
+        accumulationBuffer[target_idx++] = std::accumulate(&accumulationBuffer[size - k_right_remainder], &accumulationBuffer[size], 0.0);
     }
 
     assert(target_idx == k_size);

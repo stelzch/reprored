@@ -48,6 +48,10 @@ inline T round_down_to_multiple(T x, T n) {
     return x - (x % n);
 }
 
+inline bool index_in_bounds(size_t idx, size_t size) {
+    return idx < size;
+}
+
 const uint8_t MAX_MESSAGE_LENGTH = 4;
 
 struct MessageBufferEntry {
@@ -190,14 +194,17 @@ protected:
 private:
     const uint64_t k;
     const int rank, clusterSize;
-    const vector<region> k_regions;
     const vector<region> regions;
-    const uint64_t globalSize;
     const MPI_Comm comm;
-    const uint64_t k_size,  k_begin, k_end;
     const uint64_t size,  begin, end;
-    const uint64_t k_send;
-    const uint64_t k_recv;
+
+    const vector<region> k_regions;
+    const uint64_t k_size,  k_begin, k_end;
+    const uint64_t k_left_remainder;
+    const uint64_t k_right_remainder;
+
+    const uint64_t globalSize;
+
 
     vector<double, AlignedAllocator<double>> accumulationBuffer;
     std::chrono::duration<double> acquisitionDuration;
