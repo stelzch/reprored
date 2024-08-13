@@ -175,7 +175,7 @@ protected:
                     dstBuffer[elementsWritten++] = a;
                 } else {
                     // indexB must be fetched from another rank
-                    const double b = messageBuffer.get(rankFromIndexMap(indexB), indexB);
+                    const double b = message_buffer.get(rankFromIndexMap(indexB), indexB);
                     dstBuffer[elementsWritten++] = a + b;
                 }
 
@@ -204,16 +204,17 @@ private:
     const uint64_t k_right_remainder;
 
     const uint64_t globalSize;
+    const uint64_t accumulation_buffer_offset;
 
 
-    vector<double, AlignedAllocator<double>> accumulationBuffer;
-    std::chrono::duration<double> acquisitionDuration;
-    std::map<uint64_t, int> startIndices;
-    long int acquisitionCount;
-    vector<uint64_t> rankIntersectingSummands;
+    vector<double, AlignedAllocator<double>> accumulation_buffer;
+    std::chrono::duration<double> acquisition_duration;
+    std::map<uint64_t, int> start_indices;
+    long int acquisition_count;
+    vector<uint64_t> rank_intersecting_summands;
 
     uint64_t reduction_counter;
 
 
-    MessageBuffer messageBuffer;
+    MessageBuffer message_buffer;
 };
