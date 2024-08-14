@@ -60,8 +60,8 @@ if(BUILD_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
-    add_executable(test test/reproducibility_test.cpp)
-    target_link_libraries(test GTest::gtest_main)
+    add_executable(test test/main.cpp test/reproducibility_test.cpp)
+    target_link_libraries(test GTest::gtest_main MPI::MPI_CXX)
 
     include(GoogleTest)
     gtest_discover_tests(test)
