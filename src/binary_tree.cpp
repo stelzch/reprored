@@ -466,7 +466,9 @@ void BinaryTreeSummation::linear_sum_k() {
 /* Sum all numbers. Will return the total sum on rank 0
     */
 double BinaryTreeSummation::accumulate(void) {
-    linear_sum_k();
+    if (k != 1) {
+        linear_sum_k();
+    }
     for (auto summand : rank_intersecting_summands) {
         if (subtree_size(summand) > 16) {
             // If we are about to do some considerable amount of work, make sure
