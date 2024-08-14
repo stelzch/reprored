@@ -60,8 +60,15 @@ if(BUILD_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
+    FetchContent_Declare(
+        kassert
+        GIT_REPOSITORY https://github.com/kamping-site/kassert
+        GIT_TAG f0873f85ff046c6dee35a85148a51bfab73af44a
+    )
+    FetchContent_MakeAvailable(kassert)
+
     add_executable(test test/main.cpp test/reproducibility_test.cpp)
-    target_link_libraries(test GTest::gtest_main MPI::MPI_CXX)
+    target_link_libraries(test GTest::gtest_main GTest::gmock MPI::MPI_CXX kassert binarytreesummation)
 
     include(GoogleTest)
     gtest_discover_tests(test)
