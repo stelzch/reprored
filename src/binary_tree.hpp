@@ -52,6 +52,10 @@ inline bool index_in_bounds(size_t idx, size_t size) {
     return idx < size;
 }
 
+inline bool implicates(bool a, bool b) {
+    return !a || b;
+}
+
 const uint8_t MAX_MESSAGE_LENGTH = 4;
 
 struct MessageBufferEntry {
@@ -140,6 +144,8 @@ protected:
     void linear_sum_k();
 
     const vector<region> calculate_k_regions(const vector<region> regions) const;
+    const vector<int> calculate_k_predecessors() const;
+    const int calculate_k_successor() const;
     const uint64_t largest_child_index(const uint64_t index) const;
     const uint64_t subtree_size(const uint64_t index) const;
 
@@ -194,17 +200,26 @@ protected:
 private:
     const uint64_t k;
     const int rank, clusterSize;
+    const bool is_last_rank;
     const vector<region> regions;
     const MPI_Comm comm;
     const uint64_t size,  begin, end;
 
+    const bool no_k_intercept; // if true no number in [begin, end) is divisible by k
     const vector<region> k_regions;
     const uint64_t k_size,  k_begin, k_end;
     const uint64_t k_left_remainder;
     const uint64_t k_right_remainder;
 
+    const vector<int> k_predecessor_ranks; // ranks we receive from during linear sum.
+                                      // In non-degenerate case this is the next lower rank
+    const int k_successor_rank; // ranks we send to during linear sum.
+                           // In non-degenerate case this is the next higher rank.
+    vector<MPI_Request> k_recv_reqs;
+
     const uint64_t globalSize;
-    const uint64_t accumulation_buffer_offset;
+    const uint64_t accumulation_buffer_offset_pre_k;
+    const uint64_t accumulation_buffer_offset_post_k;
 
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
