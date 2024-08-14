@@ -24,6 +24,7 @@ using Distribution = struct Distribution {
 
 auto regions_from_distribution(const Distribution& d) {
     vector<region> regions;
+    regions.reserve(d.displs.size());
 
     for (auto i = 0U; i < d.displs.size(); ++i) {
         regions.emplace_back(d.displs[i], d.send_counts[i]);
@@ -253,7 +254,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
             with_comm_size_n(comm, 1, [&reference_result, &data_array, &full_comm_rank, &comm, &k](auto comm_) {
                 KASSERT(comm_.size() == 1);
                 const auto distribution = distribute_evenly(data_array.size(), 1);
-                BinaryTreeSummation bts(full_comm_rank, regions_from_distribution(distribution), k, comm);
+                BinaryTreeSummation bts(full_comm_rank, regions_from_distribution(distribution), k, comm_);
                 memcpy(bts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
 
                 reference_result = bts.accumulate();
@@ -268,10 +269,21 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                 auto const ranks        = rank_distribution(rng);
                 auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
+                if (full_comm_rank == 0) {
+                    printf("n=%zu, p=%zu, k=%zu, distribution=", data_array_size, ranks, k);
+                    for (auto i = 0; i < ranks; ++i) {
+                        printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
+                    }
+                    printf("\n");
+                }
+
                 with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &full_comm_rank, &full_comm_size, &comm, &k](auto comm_) {
                     MPI_Barrier(comm_);
-                    ASSERT_EQ(ranks, full_comm_size);
-                    // Since not all ranks execute this function, rng may not be used to avoid it from falling out of sync
+                    int comm_size;
+                    MPI_Comm_size(comm_, &comm_size);
+                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                    ASSERT_EQ(distribution.displs.size(), comm_size);
+                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
                     BinaryTreeSummation bts(full_comm_rank, regions_from_distribution(distribution), k, comm_);
 
@@ -287,6 +299,10 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                 });
             }
         }
+    }
+
+    if (full_comm_rank == 0) {
+        printf("Performed %zu checks\n", checks);
     }
 }
 
