@@ -7,6 +7,8 @@
 #include <utility>
 #include <mpi.h>
 
+#include <k_chunked_array.hpp>
+
 using std::vector;
 using std::array;
 using std::map;
@@ -38,23 +40,6 @@ struct AlignedAllocator
     }
 };
 
-template<typename T>
-inline T round_up_to_multiple(T x, T n) {
-    return (x % n == 0) ? x : x + n - (x % n);
-}
-
-template<typename T>
-inline T round_down_to_multiple(T x, T n) {
-    return x - (x % n);
-}
-
-inline bool index_in_bounds(size_t idx, size_t size) {
-    return idx < size;
-}
-
-inline bool implicates(bool a, bool b) {
-    return !a || b;
-}
 
 const uint8_t MAX_MESSAGE_LENGTH = 4;
 
@@ -91,12 +76,8 @@ protected:
     MPI_Comm comm;
 };
 
-typedef struct {
-    uint64_t globalStartIndex;
-    uint64_t size;
-} region;
 
-class BinaryTreeSummation {
+class BinaryTreeSummation : public KChunkedArray {
 public:
     /** Instantiate new binary tree accumulator.
      * For a reproducible result, the order of numbers must remain the same
@@ -110,12 +91,6 @@ public:
 
     virtual ~BinaryTreeSummation();
 
-    static const uint64_t parent(const uint64_t i);
-
-    bool isLocal(uint64_t index) const;
-
-    /** Determine which rank has the number with a given index */
-    uint64_t rankFromIndexMap(const uint64_t index) const;
 
     double *getBuffer();
     void storeSummand(uint64_t localIndex, double val);
@@ -125,10 +100,6 @@ public:
      */
     double accumulate(void);
 
-    /* Calculate all rank-intersecting summands that must be sent out because
-     * their parent is non-local and located on another rank
-     */
-    vector<uint64_t> calculateRankIntersectingSummands(void) const;
 
     /* Return the average number of nanoseconds spend in total on waiting for intermediary
      * results from other hosts
@@ -143,15 +114,6 @@ public:
 protected:
     void linear_sum_k();
 
-    const vector<region> calculate_k_regions(const vector<region> regions) const;
-    const vector<int> calculate_k_predecessors() const;
-    const int calculate_k_successor() const;
-    const uint64_t largest_child_index(const uint64_t index) const;
-    const uint64_t subtree_size(const uint64_t index) const;
-
-    /** Figure out if the parts that make up a certain index are all local and form a subtree
-     * of a specifc size */
-    const bool is_local_subtree_of_size(const uint64_t expectedSubtreeSize, const uint64_t i) const;
     const double accumulate_local_8subtree(const uint64_t startIndex) const;
 
     inline const double sum_remaining_8tree(const uint64_t bufferStartIndex,
@@ -198,35 +160,15 @@ protected:
 
 
 private:
-    const uint64_t k;
-    const int rank, clusterSize;
-    const bool is_last_rank;
-    const vector<region> regions;
     const MPI_Comm comm;
-    const uint64_t size,  begin, end;
-
-    const bool no_k_intercept; // if true no number in [begin, end) is divisible by k
-    const vector<region> k_regions;
-    const uint64_t k_size,  k_begin, k_end;
-    const uint64_t k_left_remainder;
-    const uint64_t k_right_remainder;
-
-    const vector<int> k_predecessor_ranks; // ranks we receive from during linear sum.
-                                      // In non-degenerate case this is the next lower rank
-    const int k_successor_rank; // ranks we send to during linear sum.
-                           // In non-degenerate case this is the next higher rank.
     vector<MPI_Request> k_recv_reqs;
-
-    const uint64_t globalSize;
     const uint64_t accumulation_buffer_offset_pre_k;
     const uint64_t accumulation_buffer_offset_post_k;
 
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
     std::chrono::duration<double> acquisition_duration;
-    std::map<uint64_t, int> start_indices;
     long int acquisition_count;
-    vector<uint64_t> rank_intersecting_summands;
 
     uint64_t reduction_counter;
 

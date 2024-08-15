@@ -1,18 +1,14 @@
 #include <mpi.h>
-#include <iostream>
-#include <fstream>
-#include <exception>
-#include <vector>
 #include <numeric>
 #include <cstring>
 #include <cassert>
 #include <cmath>
 #include <unistd.h>
-#include <memory>
-#include <functional>
 #include <chrono>
 #include <io.hpp>
 #include "binary_tree.hpp"
+#include "k_chunked_array.hpp"
+#include <util.hpp>
 
 #ifdef AVX
 #include <immintrin.h>
@@ -150,53 +146,26 @@ const void MessageBuffer::printStats() const {
 
 BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> regions, uint64_t k, MPI_Comm comm)
     :
-      k(k),
-      rank(rank),
-      clusterSize(regions.size()),
-      is_last_rank(rank == clusterSize  - 1),
-      regions(regions),
+      KChunkedArray(rank, regions, k),
       comm(comm),
-      size(regions[rank].size),
-      begin(regions[rank].globalStartIndex),
-      end(begin + size),
-      no_k_intercept(begin % k != 0 && begin / k == end / k),
-      k_regions(calculate_k_regions(regions)),
-      k_size(k_regions[rank].size),
-      k_begin(k_regions[rank].globalStartIndex),
-      k_end(k_begin + k_size),
-      k_left_remainder(k_regions[rank].size == 0 ? 0 : min(round_up_to_multiple(begin, k),end) - begin),
-      k_right_remainder((is_last_rank && no_k_intercept) ? 0 : end - max(round_down_to_multiple(end, k), begin)),
-      k_predecessor_ranks(calculate_k_predecessors()),
-      k_successor_rank(calculate_k_successor()),
       k_recv_reqs(k_predecessor_ranks.size()),
-      globalSize(std::accumulate(k_regions.begin(), k_regions.end(), 0,
-                 [](uint64_t acc, const region& r) {
-                  return acc + r.size;
-        })),
       accumulation_buffer_offset_pre_k(k - k_left_remainder),
       accumulation_buffer_offset_post_k(k),
       accumulation_buffer(k + size + k_right_remainder), // TODO: this memory allocation is non-optimal on ranks
-                                                                       // with no left remainder. Reduce it to an appropriate value.
+                                                         // with no left remainder. Reduce it to an appropriate value.
       acquisition_duration(std::chrono::duration<double>::zero()),
       acquisition_count(0L),
-      rank_intersecting_summands(calculateRankIntersectingSummands()),
       reduction_counter(0UL),
       message_buffer(comm)
 {
-    printf("rank %i left remainder %zu, right remainder %zu, size %zu, no_k_intercept %i, is_last_rank %i\n", rank, k_left_remainder, k_right_remainder, size, no_k_intercept, is_last_rank);
+    printf("rank %i left remainder %zu, right remainder %zu, size %zu, no_k_intercept %i, is_last_rank %i, successor %i\n", rank, k_left_remainder, k_right_remainder, size, no_k_intercept, is_last_rank, k_successor_rank);
 
+    //assert(globalSize > 0);
     assert(k > 0);
     assert(k_left_remainder < k);
     assert(k_right_remainder < k);
     assert(implicates(no_k_intercept, size < k));
 
-    /* Initialize start indices map */
-    for (int p = 0; p < clusterSize; ++p) {
-        if (k_regions[p].size == 0) continue;
-        this->start_indices[k_regions[p].globalStartIndex] = p;
-    }
-    // guardian element
-    this->start_indices[globalSize] = clusterSize;
 
     // Verify that the regions are actually correct.
     // This is given if the difference to the next start index is equal to the region size
@@ -241,141 +210,23 @@ void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
     accumulation_buffer[accumulation_buffer_offset_pre_k + localIndex] = val;
 }
 
-const uint64_t BinaryTreeSummation::parent(const uint64_t i) {
-    assert(i != 0);
-
-    // clear least significand set bit
-    return i & (i - 1);
-}
-
-bool BinaryTreeSummation::isLocal(uint64_t index) const {
-    return (index >= k_begin && index < k_end);
-}
-
-uint64_t BinaryTreeSummation::rankFromIndexMap(const uint64_t index) const {
-    // Get an iterator to the start index that is greater than index
-    auto it = start_indices.upper_bound(index);
-    assert(it != start_indices.begin());
-    --it;
-
-    return it->second;
-}
-
-/* Calculate all rank-intersecting summands that must be sent out because
-    * their parent is non-local and located on another rank
-    */
-vector<uint64_t> BinaryTreeSummation::calculateRankIntersectingSummands(void) const {
-    vector<uint64_t> result;
-
-    if (k_begin == 0 || k_size == 0) {
-        return result;
-    }
-
-    assert(k_begin != 0);
-
-    uint64_t index = k_begin;
-    while (index < k_end) {
-        assert(parent(index) < k_begin);
-        result.push_back(index);
-
-        index = index + subtree_size(index);
-    }
-
-    return result;
-}
-
-const vector<region> BinaryTreeSummation::calculate_k_regions(const vector<region> regions) const {
-    const auto last_region = std::max_element(regions.begin(), regions.end(), [] (const auto& a, const auto& b) {
-            return a.globalStartIndex < b.globalStartIndex;
-    });
-
-    vector<region> k_regions;
-    k_regions.reserve(regions.size());
-
-    for (auto it = regions.begin(); it < regions.end(); ++it) {
-        const region& r = *it;
-        const auto start = round_down_to_multiple(r.globalStartIndex, k) / k;
-        auto end = round_down_to_multiple(r.globalStartIndex + r.size, k) / k;
-
-        // Additional element at the end
-        if (it == last_region && (r.globalStartIndex + r.size) % k != 0) {
-            end += 1;
-        }
-
-        k_regions.emplace_back(start, end - start);
-    }
-
-    return k_regions;
-}
-
-const vector<int> BinaryTreeSummation::calculate_k_predecessors() const {
-    vector<int> predecessors;
-
-    if (rank == 0 || k_left_remainder == 0) {
-        // There is no-one we receive from
-        return predecessors;
-    }
-
-    // Move left 
-    for (int i = rank - 1; i >= 0; --i) {
-        if ((regions[i].globalStartIndex + regions[i].size) % k == 0) {
-            // This rank won't have to send us a remainder because the
-            // PE-border coincides with the k-region border
-            break;
-        }
-
-        // TODO: handle ranks that have zero numbers assigned
-        predecessors.push_back(i);
-
-        if (k_regions[i].size >= 1) {
-            // The rank i has a k-region assigned so any ranks lower than i
-            // will send their remainder to to i instead.
-            break;
-        }
-    }
-
-    // We build the list of predecessors from right to left (ranks descending)
-    // but during traversal we want the ranks to ascend.
-    std::reverse(predecessors.begin(), predecessors.end());
-
-
-    return predecessors;
-}
-
-const int BinaryTreeSummation::calculate_k_successor() const {
-    // No successor on last rank
-    if (rank == clusterSize - 1) {
-        return -1;
-    }
-
-    for (int i = rank + 1; i < clusterSize; ++i) {
-        if (k_regions[i].size > 0) {
-            return i;
-        }
-    }
-
-    assert(0); // We should never reach this statement, unless the global size is 0.
-    return -2;
-}
 
 void BinaryTreeSummation::linear_sum_k() {
     MPI_Request send_req;
 
-    // Sum & send right remainder
-    // TODO: support unreduced sends
-    const bool is_last_rank = rank == clusterSize - 1;
-    if (k_size == 0 && rank != 0) {
+    if (!left_neighbor_has_different_successor && size != 0) {
         // We do not reduce any summands on our own, we simply pass them to the successor
-        assert(k_successor_rank > 0);
+        assert(k_successor_rank >= 0);
         assert(size == k_right_remainder);
 
-        printf("rank %i sending all data to successor %i\n", k_successor_rank);
+        printf("rank %i sending all data to successor %i\n", rank, k_successor_rank);
 
         MPI_Send(&accumulation_buffer[accumulation_buffer_offset_pre_k], size, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm);
         return; // We are done here
 
     } else if (k_right_remainder > 0 && !is_last_rank) {
-        assert(k_successor_rank > 0);
+        // Sum & send right remainder
+        assert(k_successor_rank >= 0);
         double acc = std::accumulate(&accumulation_buffer[accumulation_buffer_offset_pre_k + size - k_right_remainder], &accumulation_buffer[accumulation_buffer_offset_pre_k + size], 0.0);
         printf("rank %i successor is %i, sending accumulated %zu numbers (result %f)\n", rank, k_successor_rank, k_right_remainder, acc);
         MPI_Isend(&acc, 1, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
@@ -393,7 +244,7 @@ void BinaryTreeSummation::linear_sum_k() {
         const auto other_rank = k_predecessor_ranks[i];
         if (i == 0) {
             printf("%i (1 element) ", other_rank);
-            assert(k_regions[other_rank].size > 0 || other_rank == 0);
+            assert(k_regions[other_rank].size > 0 || index_order_permutation[other_rank] == 0);
             MPI_Irecv(&left_remainder_accumulator, 1, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
         } else {
             assert(k_regions[other_rank].size == 0);
@@ -466,7 +317,7 @@ void BinaryTreeSummation::linear_sum_k() {
 /* Sum all numbers. Will return the total sum on rank 0
     */
 double BinaryTreeSummation::accumulate(void) {
-    if (k != 1) {
+    if (k != 1 && size > 0) {
         linear_sum_k();
     }
     for (auto summand : rank_intersecting_summands) {
@@ -566,14 +417,6 @@ const double BinaryTreeSummation::acquisitionTime(void) const {
     return std::chrono::duration_cast<std::chrono::nanoseconds> (acquisition_duration).count();
 }
 
-const uint64_t BinaryTreeSummation::largest_child_index(const uint64_t index) const {
-    return index | (index - 1);
-}
-
-const uint64_t BinaryTreeSummation::subtree_size(const uint64_t index) const {
-    assert(index != 0);
-    return largest_child_index(index) + 1 - index;
-}
 
 const void BinaryTreeSummation::printStats() const {
     message_buffer.printStats();
