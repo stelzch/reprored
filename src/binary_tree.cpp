@@ -158,19 +158,7 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
       reduction_counter(0UL),
       message_buffer(comm)
 {
-    printf("rank %i left remainder %zu, right remainder %zu, size %zu, no_k_intercept %i, is_last_rank %i, successor %i k_regions = {", rank, k_left_remainder, k_right_remainder, size, no_k_intercept, is_last_rank, k_successor_rank);
-
-    for (auto kr : k_regions) {
-        printf("(%lu, %lu) ", kr.globalStartIndex, kr.size);
-    }
-
-    printf("}\n");
-
-
-
-    fflush(stdout);
-
-    //assert(globalSize > 0);
+    assert(globalSize > 0);
     assert(k > 0);
     assert(k_left_remainder < k);
     assert(k_right_remainder < k);
@@ -229,8 +217,6 @@ void BinaryTreeSummation::linear_sum_k() {
         assert(k_successor_rank >= 0);
         assert(size == k_right_remainder);
 
-        printf("rank %i sending all data to successor %i\n", rank, k_successor_rank);
-
         MPI_Isend(&accumulation_buffer[accumulation_buffer_offset_pre_k], size, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
         return; // We are done here
 
@@ -238,7 +224,6 @@ void BinaryTreeSummation::linear_sum_k() {
         // Sum & send right remainder
         assert(k_successor_rank >= 0);
         double acc = std::accumulate(&accumulation_buffer[accumulation_buffer_offset_pre_k + size - k_right_remainder], &accumulation_buffer[accumulation_buffer_offset_pre_k + size], 0.0);
-        printf("rank %i successor is %i, sending accumulated %zu numbers (result %f)\n", rank, k_successor_rank, k_right_remainder, acc);
         MPI_Isend(&acc, 1, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
     }
 
@@ -249,36 +234,30 @@ void BinaryTreeSummation::linear_sum_k() {
     double left_remainder_accumulator;
     uint64_t left_remainder_running_index = 0;
 
-    printf("rank %i receiving from ", rank);
     for (int i = 0U; i < k_predecessor_ranks.size(); ++i) {
         const auto other_rank = k_predecessor_ranks[i];
         if (i == 0) {
-            printf("%i (1 element) ", other_rank);
             assert((k_regions[other_rank].size > 0) || (other_rank == start_indices.begin()->second));
             MPI_Irecv(&left_remainder_accumulator, 1, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
         } else {
             assert(k_regions[other_rank].size == 0);
             const auto elements_to_receive = regions.at(other_rank).size; // We receive all numbers the other rank holds
-            printf("%i (%zu elements)  ", other_rank, elements_to_receive);
 
             MPI_Irecv(&accumulation_buffer[left_remainder_running_index], elements_to_receive, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
             left_remainder_running_index += elements_to_receive;
             assert(left_remainder_running_index < k);
         }
     }
-    printf("\n");
 
     // Sum local k-tuples that do not overlap with PE-boundaries
     const bool has_left_remainder = (k_left_remainder > 0);
     uint64_t target_idx = has_left_remainder ? 1U : 0U;
     for (uint64_t i = k_left_remainder; i + k - 1 < size; i += k) {
-        printf("rank %i summing local k tuple %zu-%zu\n", rank, i, i+k);
         accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] = std::accumulate(&accumulation_buffer[accumulation_buffer_offset_pre_k + i], &accumulation_buffer[accumulation_buffer_offset_pre_k + i + k], 0.0);
     }
 
     // On the last rank manually sum right remainder since it can not be sent anywhere.
     if (k_right_remainder > 0 && is_last_rank) {
-        printf("rank %i summing last buffer entries %zu-%zu into buffer index %zu\n", rank, accumulation_buffer_offset_pre_k + size - k_right_remainder, accumulation_buffer_offset_pre_k + size, accumulation_buffer_offset_post_k + target_idx);
         accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] = std::accumulate(
                                                             &accumulation_buffer[accumulation_buffer_offset_pre_k + size - k_right_remainder],
                                                             &accumulation_buffer[accumulation_buffer_offset_pre_k + size],
@@ -319,14 +298,7 @@ void BinaryTreeSummation::linear_sum_k() {
 
 
 
-    printf("rank %i asserting target_idx = %zu == %zu = k_size\n", rank, target_idx, k_size);
     assert(target_idx == k_size);
-
-    printf("rank %i has k_reduced elements ", rank);
-    for (auto i = 0U; i < k_size; ++i) {
-        printf("%f ", accumulation_buffer[accumulation_buffer_offset_post_k + i]);
-    }
-    printf("\n");
 }
 
 /* Sum all numbers. Will return the total sum on rank 0
