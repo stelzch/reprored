@@ -160,7 +160,7 @@ TEST(KChunkedArray, Example3) {
   EXPECT_EQ(a[1].get_left_remainder(), 0);
   EXPECT_EQ(a[1].get_right_remainder(), 2);
   EXPECT_FALSE(a[1].get_is_last_rank());
-  EXPECT_FALSE(a[1].get_left_neighbor_has_different_successor());
+  EXPECT_TRUE(a[1].get_left_neighbor_has_different_successor());
 
 
   EXPECT_LT(a[0].get_successor(), 0);
@@ -196,5 +196,25 @@ TEST(KChunkedArray, Example4) {
     EXPECT_EQ(a[1].get_left_remainder(), 1);
     EXPECT_EQ(a[1].get_right_remainder(), 0);
     EXPECT_TRUE(a[1].get_is_last_rank());
+}
 
+TEST(KChunkedArray, Example5) {
+   /*
+    *           ▼        ▼        ▼  
+    * ┌────────┬──┬──┬──────────────┐
+    * │  p2    │p0│p3│     p1       │
+    * └────────┴──┴──┴──────────────┘
+    *  0  1  2  3  4  5  6  7  8  9
+    *
+    */
+    const vector<region> regions {{3, 1}, {5, 5}, {0, 3}, {4, 1}};
+    auto a = instantiate_all_ranks(regions, 3);
+
+    EXPECT_THAT(a[1].get_predecessors(), ElementsAre(0,3));
+    EXPECT_EQ(a[1].get_left_remainder(), 1);
+    EXPECT_EQ(a[1].get_right_remainder(), 1);
+
+    EXPECT_TRUE(a[0].get_left_neighbor_has_different_successor());
+    EXPECT_EQ(a[0].get_left_remainder(), 0);
+    EXPECT_EQ(a[0].get_right_remainder(), 1);
 }

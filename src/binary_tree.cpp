@@ -204,10 +204,10 @@ BinaryTreeSummation::~BinaryTreeSummation() {
 double *BinaryTreeSummation::getBuffer() {
     return accumulation_buffer.data() + accumulation_buffer_offset_pre_k;
 }
+
 void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
     accumulation_buffer[accumulation_buffer_offset_pre_k + localIndex] = val;
 }
-
 
 void BinaryTreeSummation::linear_sum_k() {
     MPI_Request send_req = MPI_REQUEST_NULL;
@@ -237,7 +237,7 @@ void BinaryTreeSummation::linear_sum_k() {
     for (int i = 0U; i < k_predecessor_ranks.size(); ++i) {
         const auto other_rank = k_predecessor_ranks[i];
         if (i == 0) {
-            assert((k_regions[other_rank].size > 0) || (other_rank == start_indices.begin()->second));
+            assert((k_regions[other_rank].size > 0) || (other_rank == start_indices.begin()->second) || (regions.at(other_rank).globalStartIndex % k == 0));
             MPI_Irecv(&left_remainder_accumulator, 1, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
         } else {
             assert(k_regions[other_rank].size == 0);

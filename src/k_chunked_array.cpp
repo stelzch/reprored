@@ -33,7 +33,7 @@ KChunkedArray::KChunkedArray(uint64_t rank, vector<region> regions, uint64_t K)
       k_end(k_begin + k_size),
       k_left_remainder(k_regions[rank].size == 0 ? 0 : std::min(round_up_to_multiple(begin, k),end) - begin),
       k_right_remainder((is_last_rank && no_k_intercept) ? 0 : end - std::max(round_down_to_multiple(end, k), begin)),
-      left_neighbor_has_different_successor(start_indices.begin()->second == rank || k_regions[rank].size > 0),
+      left_neighbor_has_different_successor(start_indices.begin()->second == rank || k_regions[rank].size > 0 || begin % k == 0),
       globalSize(std::accumulate(k_regions.begin(), k_regions.end(), 0UL,
                  [](uint64_t acc, const region& r) {
                   return acc + r.size;

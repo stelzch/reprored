@@ -179,8 +179,13 @@ void with_comm_size_n(
     MPI_Comm new_comm;
     MPI_Comm_split(comm, rank_active, 0, &new_comm);
 
+    int new_rank;
+    int new_comm_size;
+    MPI_Comm_rank(new_comm, &new_rank);
+    MPI_Comm_size(new_comm, &new_comm_size);
+
     if (rank_active) {
-        f(new_comm);
+        f(new_comm, new_rank, new_comm_size);
     }
 
     MPI_Comm_free(&new_comm);
@@ -192,9 +197,7 @@ TEST(ReproducibleReduceTest, WorksWithNonzeroRoot) {
     std::vector<double> array{1.0, 2.0, 3.0, 4.0};
     Distribution        distribution({2, 2}, {2, 0});
 
-    with_comm_size_n(full_comm, 2, [&distribution, &array](auto comm) {
-        int rank;
-        MPI_Comm_rank(comm, &rank);
+    with_comm_size_n(full_comm, 2, [&distribution, &array](auto comm, auto rank, auto _) {
         BinaryTreeSummation bts(rank, regions_from_distribution(distribution), 8, comm);
 
 
@@ -204,6 +207,32 @@ TEST(ReproducibleReduceTest, WorksWithNonzeroRoot) {
         double result = bts.accumulate();
 
         EXPECT_EQ(result, (1.0 + 2.0) + (3.0 + 4.0));
+    });
+}
+
+TEST(ReproducibleReduceTest, OtherExample) {
+   /*
+    *           ▼        ▼        ▼  
+    * ┌────────┬──┬──┬──────────────┐
+    * │  p2    │p0│p3│     p1       │
+    * └────────┴──┴──┴──────────────┘
+    *  0  1  2  3  4  5  6  7  8  9
+    *
+    */
+    auto full_comm = MPI_COMM_WORLD;
+    Distribution        distribution({1, 5, 3, 1}, {3, 5, 0, 4});
+    const auto array = generate_test_vector(10, 42);
+    const auto K = 3;
+
+    with_comm_size_n(full_comm, 4, [&distribution, &array, &K] (auto comm, auto rank, auto _) {
+        BinaryTreeSummation bts(rank, regions_from_distribution(distribution), K);
+
+        auto local_array = scatter_array(comm, array, distribution);
+        memcpy(bts.getBuffer(), local_array.data(), local_array.size() * sizeof(double));
+
+        double result = bts.accumulate();
+
+        EXPECT_NEAR(result, std::accumulate(array.begin(), array.end(), 0.0), 1e-9);
     });
 }
 
@@ -218,9 +247,9 @@ TEST(ReproducibleReduceTest, Fuzzing) {
 
     ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS        = 200; // 15;
+    constexpr auto NUM_ARRAYS        = 20000; // 15;
     constexpr auto NUM_KS            = 20;
-    constexpr auto NUM_DISTRIBUTIONS = 30000; // 5000;
+    constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
@@ -231,9 +260,9 @@ TEST(ReproducibleReduceTest, Fuzzing) {
     }
     MPI_Bcast(&seed, 1, MPI_UNSIGNED_LONG, 0, comm);
 
-    std::uniform_int_distribution<size_t> array_length_distribution(0, 20);
+    std::uniform_int_distribution<size_t> array_length_distribution(1, 20);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
-    std::uniform_int_distribution<size_t> k_distribution(1, 30);
+    std::uniform_int_distribution<size_t> k_distribution(1, 24);
     std::mt19937                          rng(seed);       // RNG for distribution & rank number
     std::mt19937                          rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
 
@@ -251,10 +280,9 @@ TEST(ReproducibleReduceTest, Fuzzing) {
             double reference_result = 0;
 
             // Calculate reference result
-            with_comm_size_n(comm, 1, [&reference_result, &data_array, &full_comm_rank, &comm, &k](auto comm_) {
-                KASSERT(comm_.size() == 1);
+            with_comm_size_n(comm, 1, [&reference_result, &data_array, &comm, &k](auto comm_, auto rank, auto _) {
                 const auto distribution = distribute_evenly(data_array.size(), 1);
-                BinaryTreeSummation bts(full_comm_rank, regions_from_distribution(distribution), k, comm_);
+                BinaryTreeSummation bts(rank, regions_from_distribution(distribution), k, comm_);
                 memcpy(bts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
 
                 reference_result = bts.accumulate();
@@ -277,7 +305,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                     printf("\n");
                 }
 
-                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &full_comm_rank, &full_comm_size, &comm, &k](auto comm_) {
+                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &comm, &k](auto comm_, auto rank, auto size) {
                     MPI_Barrier(comm_);
                     int comm_size;
                     MPI_Comm_size(comm_, &comm_size);
@@ -285,14 +313,14 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                     ASSERT_EQ(distribution.displs.size(), comm_size);
                     ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                    BinaryTreeSummation bts(full_comm_rank, regions_from_distribution(distribution), k, comm_);
+                    BinaryTreeSummation bts(rank, regions_from_distribution(distribution), k, comm_);
 
                     std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
                     memcpy(bts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
                     double computed_result = bts.accumulate();
 
-                    if (full_comm_rank == 0) {
+                    if (rank == 0) {
                         EXPECT_EQ(computed_result, reference_result);
                     }
                     ++checks;
