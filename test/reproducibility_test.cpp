@@ -190,12 +190,12 @@ TEST(ReproducibleReduceTest, WorksWithNonzeroRoot) {
 
     auto full_comm = MPI_COMM_WORLD;
     std::vector<double> array{1.0, 2.0, 3.0, 4.0};
-    Distribution        distribution({0, 4}, {0, 0});
+    Distribution        distribution({2, 2}, {2, 0});
 
     with_comm_size_n(full_comm, 2, [&distribution, &array](auto comm) {
         int rank;
         MPI_Comm_rank(comm, &rank);
-        BinaryTreeSummation bts(rank, regions_from_distribution(distribution), 1, comm);
+        BinaryTreeSummation bts(rank, regions_from_distribution(distribution), 8, comm);
 
 
         auto local_array = scatter_array(comm, array, distribution);

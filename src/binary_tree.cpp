@@ -158,7 +158,17 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
       reduction_counter(0UL),
       message_buffer(comm)
 {
-    printf("rank %i left remainder %zu, right remainder %zu, size %zu, no_k_intercept %i, is_last_rank %i, successor %i\n", rank, k_left_remainder, k_right_remainder, size, no_k_intercept, is_last_rank, k_successor_rank);
+    printf("rank %i left remainder %zu, right remainder %zu, size %zu, no_k_intercept %i, is_last_rank %i, successor %i k_regions = {", rank, k_left_remainder, k_right_remainder, size, no_k_intercept, is_last_rank, k_successor_rank);
+
+    for (auto kr : k_regions) {
+        printf("(%lu, %lu) ", kr.globalStartIndex, kr.size);
+    }
+
+    printf("}\n");
+
+
+
+    fflush(stdout);
 
     //assert(globalSize > 0);
     assert(k > 0);
@@ -169,9 +179,9 @@ BinaryTreeSummation::BinaryTreeSummation(uint64_t rank, const vector<region> reg
 
     // Verify that the regions are actually correct.
     // This is given if the difference to the next start index is equal to the region size
-    for (auto it = start_indices.begin(); it != start_indices.end(); ++it) {
+    for (auto it = k_start_indices.begin(); it != k_start_indices.end(); ++it) {
         auto next = std::next(it);
-        if (next == start_indices.end()) break;
+        if (next == k_start_indices.end()) break;
 
         assert(it->first + k_regions[it->second].size == next->first);
     }
@@ -212,16 +222,16 @@ void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
 
 
 void BinaryTreeSummation::linear_sum_k() {
-    MPI_Request send_req;
+    MPI_Request send_req = MPI_REQUEST_NULL;
 
-    if (!left_neighbor_has_different_successor && size != 0) {
+    if (!left_neighbor_has_different_successor) {
         // We do not reduce any summands on our own, we simply pass them to the successor
         assert(k_successor_rank >= 0);
         assert(size == k_right_remainder);
 
         printf("rank %i sending all data to successor %i\n", rank, k_successor_rank);
 
-        MPI_Send(&accumulation_buffer[accumulation_buffer_offset_pre_k], size, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm);
+        MPI_Isend(&accumulation_buffer[accumulation_buffer_offset_pre_k], size, MPI_DOUBLE, k_successor_rank, MESSAGEBUFFER_MPI_TAG, comm, &send_req);
         return; // We are done here
 
     } else if (k_right_remainder > 0 && !is_last_rank) {
@@ -244,11 +254,11 @@ void BinaryTreeSummation::linear_sum_k() {
         const auto other_rank = k_predecessor_ranks[i];
         if (i == 0) {
             printf("%i (1 element) ", other_rank);
-            assert(k_regions[other_rank].size > 0 || index_order_permutation[other_rank] == 0);
+            assert((k_regions[other_rank].size > 0) || (other_rank == start_indices.begin()->second));
             MPI_Irecv(&left_remainder_accumulator, 1, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
         } else {
             assert(k_regions[other_rank].size == 0);
-            const auto elements_to_receive = regions[other_rank].size; // We receive all numbers the other rank holds
+            const auto elements_to_receive = regions.at(other_rank).size; // We receive all numbers the other rank holds
             printf("%i (%zu elements)  ", other_rank, elements_to_receive);
 
             MPI_Irecv(&accumulation_buffer[left_remainder_running_index], elements_to_receive, MPI_DOUBLE, other_rank, MESSAGEBUFFER_MPI_TAG, comm, &k_recv_reqs[i]);
@@ -275,6 +285,11 @@ void BinaryTreeSummation::linear_sum_k() {
                                                             0.0);
     }
 
+    // Make sure the send request has gone through before waiting on received messages
+    if (send_req != MPI_REQUEST_NULL) {
+        MPI_Wait(&send_req, nullptr);
+    }
+
     // Sum received values from left remainder
     if (has_left_remainder) {
         left_remainder_running_index = 0;
@@ -283,7 +298,7 @@ void BinaryTreeSummation::linear_sum_k() {
         // TODO: if possible, join this loop with the MPI_Irecv loop above
         for (int i = 1U; i < k_predecessor_ranks.size(); ++i) {
             const auto other_rank = k_predecessor_ranks[i];
-            const auto elements_to_sum = regions[other_rank].size; // We receive all numbers the other rank holds
+            const auto elements_to_sum = regions.at(other_rank).size; // We receive all numbers the other rank holds
             MPI_Wait(&k_recv_reqs[i], nullptr);
 
             left_remainder_accumulator = std::accumulate(&accumulation_buffer[left_remainder_running_index],
@@ -320,6 +335,7 @@ double BinaryTreeSummation::accumulate(void) {
     if (k != 1 && size > 0) {
         linear_sum_k();
     }
+
     for (auto summand : rank_intersecting_summands) {
         if (subtree_size(summand) > 16) {
             // If we are about to do some considerable amount of work, make sure

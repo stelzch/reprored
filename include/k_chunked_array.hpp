@@ -12,6 +12,9 @@ typedef struct {
     uint64_t size;
 } region;
 
+
+
+
 class KChunkedArray {
     public:
         KChunkedArray(uint64_t rank, vector<region> regions, uint64_t K = 1);
@@ -38,22 +41,22 @@ class KChunkedArray {
         */
         vector<uint64_t> calculateRankIntersectingSummands(void) const;
         const vector<region> calculate_k_regions(const vector<region> regions) const;
-        const vector<size_t> calculate_rank_order_permutation() const;
-        const size_t calculate_index() const;
         const vector<int> calculate_k_predecessors() const;
         const int calculate_k_successor() const;
 
 
-        const map<uint64_t, int> calculate_start_indices() const;
+        const map<int, region> calculate_regions_map(const vector<region>& regions) const;
+        const map<uint64_t, int> calculate_start_indices(const vector<region>& regions) const;
+        const map<uint64_t, int> calculate_k_start_indices() const;
 
 
 
 
         const uint64_t k;
         const int rank, clusterSize;
-        const vector<region> regions;
-        const vector<size_t> index_order_permutation; // permutes region indices (rank-based) into global index order
-        const size_t index; // rank holding first few elements of array has index 0 and so on.
+
+        const map<int, region> regions; // maps rank to region. does not contain zero regions
+        const map<uint64_t, int> start_indices; // maps global array start index to rank
 
         const uint64_t size,  begin, end;
         const bool is_last_rank;
@@ -68,7 +71,7 @@ class KChunkedArray {
 
 
         const uint64_t globalSize;
-        const map<uint64_t, int> start_indices;
+        const map<uint64_t, int> k_start_indices;
 
         const vector<int> k_predecessor_ranks; // ranks we receive from during linear sum.
                                         // In non-degenerate case this is the next lower rank
