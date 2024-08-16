@@ -40,7 +40,7 @@ class KChunkedArray {
         * their parent is non-local and located on another rank
         */
         vector<uint64_t> calculateRankIntersectingSummands(void) const;
-        const vector<region> calculate_k_regions(const vector<region> regions) const;
+        const vector<region> calculate_k_regions(const vector<region>& regions) const;
         const vector<int> calculate_k_predecessors() const;
         const int calculate_k_successor() const;
 

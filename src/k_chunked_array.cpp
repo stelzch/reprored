@@ -4,17 +4,6 @@
 #include <util.hpp>
 #include <k_chunked_array.hpp>
 
-bool region_index_comparator_it(const region& a, const region& b) {
-    // Put empty regions always at the beginning
-    if (a.size == 0)
-        return true;
-
-    if (b.size == 0)
-        return false;
-
-    return a.globalStartIndex < b.globalStartIndex;
-}
-
 KChunkedArray::KChunkedArray(uint64_t rank, vector<region> regions, uint64_t K) 
     :
       k(K),
@@ -129,8 +118,10 @@ const map<uint64_t, int> KChunkedArray::calculate_k_start_indices() const {
     return start_indices;
 }
 
-const vector<region> KChunkedArray::calculate_k_regions(const vector<region> regions) const {
-    const auto last_region = std::max_element(regions.begin(), regions.end(), region_index_comparator_it);
+const vector<region> KChunkedArray::calculate_k_regions(const vector<region>& regions) const {
+
+    const auto last_rank = this->regions.rbegin()->first;
+    const auto last_region = regions.begin() + last_rank;
 
     vector<region> k_regions;
     k_regions.reserve(regions.size());
@@ -144,7 +135,11 @@ const vector<region> KChunkedArray::calculate_k_regions(const vector<region> reg
             const auto start = round_down_to_multiple(r.globalStartIndex, k) / k;
             auto end = round_down_to_multiple(r.globalStartIndex + r.size, k) / k;
 
-            // Additional element at the end
+            // If the last region has a right remainder (that is, its end index
+            // is not divisible by k) we assign it an additional, truncated
+            // k-region.  Normally, the remainder would be sent to the
+            // successor, but because it is the last region the rank has to
+            // take care of it on its own.
             if (it == last_region && (r.globalStartIndex + r.size) % k != 0) {
                 end += 1;
             }
