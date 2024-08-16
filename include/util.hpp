@@ -1,9 +1,12 @@
 #pragma once
 
+#include "k_chunked_array.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <limits>
 #include <new>
+#include <vector>
+#include <mpi.h>
 
 template<typename T>
 inline T round_up_to_multiple(T x, T n) {
@@ -49,3 +52,32 @@ struct AlignedAllocator
         std::free(p);
     }
 };
+
+using Distribution = struct Distribution {
+    std::vector<int> send_counts;
+    std::vector<int> displs;
+
+    Distribution(std::vector<int> _send_counts, std::vector<int> recv_displs)
+        : send_counts(_send_counts),
+          displs(recv_displs) {}
+};
+
+template <typename C, typename T>
+std::vector<T> scatter_array(C comm, std::vector<T> const& global_array, Distribution const d) {
+    int rank;
+    MPI_Comm_rank(comm, &rank);
+
+    std::vector<T> result(d.send_counts[rank]);
+
+    MPI_Scatterv(global_array.data(),
+            d.send_counts.data(), d.displs.data(),
+            MPI_DOUBLE, result.data(), result.size(), MPI_DOUBLE, 0, comm);
+
+    return result;
+}
+
+vector<region> regions_from_distribution(const Distribution& d);
+vector<int> displacement_from_sendcounts(std::vector<int>& send_counts);
+Distribution distribute_evenly(size_t const collection_size, size_t const comm_size);
+Distribution distribute_randomly(size_t const collection_size, size_t const comm_size, size_t const seed);
+vector<double> generate_test_vector(size_t length, size_t seed);
