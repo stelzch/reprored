@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include <binary_tree_summation.h>
 #include <numeric>
-#include "binary_tree.hpp"
+#include <binary_tree_summation.hpp>
 
 /* TODO: Remove global state. This is a crude hack. */
 MPI_Comm default_communicator = MPI_COMM_WORLD;

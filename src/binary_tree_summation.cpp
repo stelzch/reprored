@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <chrono>
 #include <io.hpp>
-#include "binary_tree.hpp"
+#include "binary_tree_summation.hpp"
 #include "k_chunked_array.hpp"
 #include <util.hpp>
 
@@ -212,7 +212,7 @@ void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
 void BinaryTreeSummation::linear_sum_k() {
     MPI_Request send_req = MPI_REQUEST_NULL;
 
-    if (!left_neighbor_has_different_successor) {
+    if (k_right_remainder && !left_neighbor_has_different_successor) {
         // We do not reduce any summands on our own, we simply pass them to the successor
         assert(k_successor_rank >= 0);
         assert(size == k_right_remainder);

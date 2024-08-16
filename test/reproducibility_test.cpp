@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <kassert/kassert.hpp>
-#include <binary_tree.hpp>
+#include <binary_tree_summation.hpp>
 
 // Test adapted from KaMPI-NG.
 // See https://github.com/kamping-site/kamping/blob/a3c61e335537291bf1af52258cc19bad445a7cd7/tests/plugins/reproducible_reduce.cpp
