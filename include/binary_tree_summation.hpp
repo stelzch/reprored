@@ -7,42 +7,13 @@
 #include <map>
 #include <mpi.h>
 
+#include <util.hpp>
 #include <k_chunked_array.hpp>
 #include <message_buffer.hpp>
 
 using std::vector;
 using std::array;
 using std::map;
-
-template<class T>
-struct AlignedAllocator
-{
-    typedef T value_type;
-
-    // default constructor
-    AlignedAllocator () =default;
-
-    // copy constructor
-    template <class U> constexpr AlignedAllocator (const AlignedAllocator<U>&) noexcept {}
-
-    T* allocate(std::size_t n) {
-        if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
-            throw std::bad_array_new_length();
-
-        if (auto p = static_cast<T*>(std::aligned_alloc(32, n * sizeof(T)))) {
-            return p;
-        }
-
-        throw std::bad_alloc();
-    }
-
-    void deallocate(T* p, std::size_t n) noexcept {
-        std::free(p);
-    }
-};
-
-
-
 
 class BinaryTreeSummation {
 public:
