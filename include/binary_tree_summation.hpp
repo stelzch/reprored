@@ -1,13 +1,14 @@
+#include "binary_tree.hpp"
 #include <cassert>
 #include <cstdint>
 #include <vector>
 #include <chrono>
 #include <array>
 #include <map>
-#include <utility>
 #include <mpi.h>
 
 #include <k_chunked_array.hpp>
+#include <message_buffer.hpp>
 
 using std::vector;
 using std::array;
@@ -41,43 +42,9 @@ struct AlignedAllocator
 };
 
 
-const uint8_t MAX_MESSAGE_LENGTH = 4;
-
-struct MessageBufferEntry {
-    uint64_t index;
-    double value;
-};
-
-class MessageBuffer {
-
-public:
-    MessageBuffer(MPI_Comm comm);
-    const void receive(const int sourceRank);
-    void flush(void);
-    void wait(void);
-
-    void put(const int targetRank, const uint64_t index, const double value);
-    const double get(const int sourceRank, const uint64_t index);
-
-    const void printStats(void) const;
-
-protected:
-
-    array<MessageBufferEntry, MAX_MESSAGE_LENGTH> entries;
-    map<uint64_t, double> inbox;
-    int targetRank;
-    vector<MessageBufferEntry> outbox;
-    vector<MessageBufferEntry> buffer;
-    vector<MPI_Request> reqs;
-    size_t awaitedNumbers;
-    size_t sentMessages;
-    size_t sentSummands;
-    bool sendBufferClear;
-    MPI_Comm comm;
-};
 
 
-class BinaryTreeSummation : public KChunkedArray {
+class BinaryTreeSummation {
 public:
     /** Instantiate new binary tree accumulator.
      * For a reproducible result, the order of numbers must remain the same
@@ -143,7 +110,7 @@ protected:
                     dstBuffer[elementsWritten++] = a;
                 } else {
                     // indexB must be fetched from another rank
-                    const double b = message_buffer.get(rankFromIndexMap(indexB), indexB);
+                    const double b = message_buffer.get(binary_tree.rankFromIndexMap(indexB), indexB);
                     dstBuffer[elementsWritten++] = a + b;
                 }
 
@@ -161,6 +128,13 @@ protected:
 
 private:
     const MPI_Comm comm;
+    const int rank;
+    const uint64_t k;
+    MessageBuffer message_buffer;
+    const KChunkedArray chunked_array;
+    const BinaryTree binary_tree;
+    const vector<region> regions;
+
     vector<MPI_Request> k_recv_reqs;
     const uint64_t accumulation_buffer_offset_pre_k;
     const uint64_t accumulation_buffer_offset_post_k;
@@ -173,5 +147,4 @@ private:
     uint64_t reduction_counter;
 
 
-    MessageBuffer message_buffer;
 };

@@ -7,42 +7,10 @@ using testing::ElementsAre;
 using testing::IsEmpty;
 
 // Class that exposes private attributes for us to test
-class KChunkedArrayTestAdapter : public KChunkedArray {
-    public:
-        KChunkedArrayTestAdapter(uint64_t rank, vector<region> regions, uint64_t K) :
-            KChunkedArray(rank, regions, K)
-        {
-        }
-
-        int get_successor() {
-            return k_successor_rank;
-        }
-
-        vector<int> get_predecessors() {
-            return k_predecessor_ranks;
-        }
-
-        uint64_t get_left_remainder() {
-            return k_left_remainder;
-        }
-
-        uint64_t get_right_remainder() {
-            return k_right_remainder;
-        }
-
-        bool get_is_last_rank() {
-            return is_last_rank;
-        }
-
-        bool get_left_neighbor_has_different_successor() {
-            return left_neighbor_has_different_successor;
-        }
-
-};
 
 // Create one KChunkedArray for each rank
-vector<KChunkedArrayTestAdapter> instantiate_all_ranks(const vector<region>& regions, uint64_t K) {
-    vector<KChunkedArrayTestAdapter> result;
+vector<KChunkedArray> instantiate_all_ranks(const vector<region>& regions, uint64_t K) {
+    vector<KChunkedArray> result;
     result.reserve(regions.size());
 
     for (auto i = 0U; i < regions.size(); ++i) {
@@ -75,21 +43,21 @@ TEST(KChunkedArrayTest, SimpleConsecutive) {
     EXPECT_EQ(a[0].get_right_remainder(), 3);
     EXPECT_THAT(a[0].get_predecessors(), IsEmpty());
     EXPECT_EQ(a[0].get_successor(), 1);
-    EXPECT_FALSE(a[0].get_is_last_rank());
-    EXPECT_TRUE(a[0].get_left_neighbor_has_different_successor());
+    EXPECT_FALSE(a[0].is_last_rank());
+    EXPECT_TRUE(a[0].has_left_neighbor_different_successor());
 
     EXPECT_EQ(a[1].get_left_remainder(), 1);
     EXPECT_EQ(a[1].get_right_remainder(), 3);
     EXPECT_THAT(a[1].get_predecessors(), ElementsAre(0));
     EXPECT_EQ(a[1].get_successor(), 2);
-    EXPECT_FALSE(a[1].get_is_last_rank());
-    EXPECT_TRUE(a[0].get_left_neighbor_has_different_successor());
+    EXPECT_FALSE(a[1].is_last_rank());
+    EXPECT_TRUE(a[0].has_left_neighbor_different_successor());
 
     EXPECT_EQ(a[2].get_left_remainder(), 1);
     EXPECT_EQ(a[2].get_right_remainder(), 3);
     EXPECT_THAT(a[2].get_predecessors(), ElementsAre(1));
     EXPECT_LT(a[2].get_successor(), 0); // Last rank does not have a successor
-    EXPECT_TRUE(a[2].get_is_last_rank());
+    EXPECT_TRUE(a[2].is_last_rank());
 }
 
 TEST(KChunkedArrayTest, ContrivedExample) {
@@ -118,10 +86,10 @@ TEST(KChunkedArrayTest, ContrivedExample) {
     EXPECT_EQ(a[7].get_successor(), 0);
     EXPECT_THAT(a[0].get_predecessors(), ElementsAre(2, 8, 7));
 
-    EXPECT_TRUE(a[2].get_left_neighbor_has_different_successor());
-    EXPECT_FALSE(a[8].get_left_neighbor_has_different_successor());
-    EXPECT_FALSE(a[7].get_left_neighbor_has_different_successor());
-    EXPECT_TRUE(a[0].get_left_neighbor_has_different_successor());
+    EXPECT_TRUE(a[2].has_left_neighbor_different_successor());
+    EXPECT_FALSE(a[8].has_left_neighbor_different_successor());
+    EXPECT_FALSE(a[7].has_left_neighbor_different_successor());
+    EXPECT_TRUE(a[0].has_left_neighbor_different_successor());
 
     EXPECT_EQ(a[0].get_left_remainder(), 2);
     EXPECT_EQ(a[0].get_right_remainder(), 3);
@@ -131,13 +99,13 @@ TEST(KChunkedArrayTest, ContrivedExample) {
     EXPECT_EQ(a[3].get_right_remainder(), 0);
     EXPECT_LT(a[3].get_successor(), 0); // last rank has no successor
     EXPECT_THAT(a[3].get_predecessors(), ElementsAre(0));
-    EXPECT_TRUE(a[3].get_is_last_rank());
+    EXPECT_TRUE(a[3].is_last_rank());
 
     for (auto i = 0; i < regions.size(); ++i) {
         if (i != 3) {
-            EXPECT_FALSE(a[i].get_is_last_rank()) << "Rank " << i << " thinks it is the last rank!";
+            EXPECT_FALSE(a[i].is_last_rank()) << "Rank " << i << " thinks it is the last rank!";
         } else {
-            EXPECT_TRUE(a[i].get_is_last_rank()) << "Rank " << i << " doesn't think it is the last rank";
+            EXPECT_TRUE(a[i].is_last_rank()) << "Rank " << i << " doesn't think it is the last rank";
         }
     }
 }
@@ -159,15 +127,15 @@ TEST(KChunkedArray, Example3) {
   EXPECT_THAT(a[1].get_predecessors(), IsEmpty());
   EXPECT_EQ(a[1].get_left_remainder(), 0);
   EXPECT_EQ(a[1].get_right_remainder(), 2);
-  EXPECT_FALSE(a[1].get_is_last_rank());
-  EXPECT_TRUE(a[1].get_left_neighbor_has_different_successor());
+  EXPECT_FALSE(a[1].is_last_rank());
+  EXPECT_TRUE(a[1].has_left_neighbor_different_successor());
 
 
   EXPECT_LT(a[0].get_successor(), 0);
   EXPECT_THAT(a[0].get_predecessors(), ElementsAre(1));
   EXPECT_EQ(a[0].get_left_remainder(), 3);
   EXPECT_EQ(a[0].get_right_remainder(), 0);
-  EXPECT_TRUE(a[0].get_is_last_rank());
+  EXPECT_TRUE(a[0].is_last_rank());
 }
 
 
@@ -188,14 +156,14 @@ TEST(KChunkedArray, Example4) {
     EXPECT_EQ(a[2].get_successor(), 1);
     EXPECT_EQ(a[2].get_left_remainder(), 0);
     EXPECT_EQ(a[2].get_right_remainder(), 5);
-    EXPECT_FALSE(a[2].get_is_last_rank());
-    EXPECT_TRUE(a[2].get_left_neighbor_has_different_successor());
+    EXPECT_FALSE(a[2].is_last_rank());
+    EXPECT_TRUE(a[2].has_left_neighbor_different_successor());
 
     EXPECT_THAT(a[1].get_predecessors(), ElementsAre(2));
     EXPECT_LT(a[1].get_successor(), 0);
     EXPECT_EQ(a[1].get_left_remainder(), 1);
     EXPECT_EQ(a[1].get_right_remainder(), 0);
-    EXPECT_TRUE(a[1].get_is_last_rank());
+    EXPECT_TRUE(a[1].is_last_rank());
 }
 
 TEST(KChunkedArray, Example5) {
@@ -214,7 +182,7 @@ TEST(KChunkedArray, Example5) {
     EXPECT_EQ(a[1].get_left_remainder(), 1);
     EXPECT_EQ(a[1].get_right_remainder(), 1);
 
-    EXPECT_TRUE(a[0].get_left_neighbor_has_different_successor());
+    EXPECT_TRUE(a[0].has_left_neighbor_different_successor());
     EXPECT_EQ(a[0].get_left_remainder(), 0);
     EXPECT_EQ(a[0].get_right_remainder(), 1);
 }
