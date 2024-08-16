@@ -6,18 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MPI REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
 
-if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
-    list(APPEND WRAPPER_SRC src/c_wrapper_reproblas.cpp)
-elseif("${REPRODUCIBLE}" STREQUAL "ALLREDUCE")
-    list(APPEND WRAPPER_SRC src/c_wrapper_allreduce.cpp)
-elseif("${REPRODUCIBLE}" STREQUAL "BINARYTREESUMMATION")
-    list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/k_chunked_array.cpp src/binary_tree.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp)
-else()
-    message(FATAL_ERROR "Unsupported reproducibility mode: ${REPRODUCIBLE}. Must be either REPROBLAS, ALLREDUCE or BINARYTREESUMMATION")
-endif()
+list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/k_chunked_array.cpp src/binary_tree.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp)
 
 
 add_definitions(-DAVX)
@@ -35,19 +27,21 @@ target_include_directories(binarytreesummation
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-if("${REPRODUCIBLE}" STREQUAL "REPROBLAS")
-    target_link_directories(binarytreesummation PUBLIC ${reproblas_LIBRARY_DIRS})
-    target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES})
-    target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
-    target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
-else()
-    target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX)
-endif()
+target_link_directories(binarytreesummation PUBLIC ${reproblas_LIBRARY_DIRS})
+target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES})
+target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
+target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 
 if(BUILD_EXAMPLE_EXECUTABLE)
     add_executable(sum src/main.cpp src/io.cpp)
     target_link_libraries(sum PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
     target_compile_options(sum PRIVATE -Wall -O3 -ggdb -mavx)
+endif()
+
+if(BUILD_BENCHMARK)
+    add_executable(benchmark src/benchmark.cpp)
+    target_link_libraries(benchmark PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
+    target_compile_options(benchmark PRIVATE -Wall -O3 -ggdb -mavx)
 endif()
 
 if(BUILD_TESTS)

@@ -27,5 +27,6 @@ class ReproblasSummation {
         int rank;
         MPI_Comm comm;
         vector<double, AlignedAllocator<double>> buffer;
-        double_binned *isum, *local_isum;
+        double_binned *isum;
+        double_binned *local_isum;
 };

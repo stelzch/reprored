@@ -7,6 +7,7 @@
 #include <new>
 #include <vector>
 #include <mpi.h>
+#include <chrono>
 
 template<typename T>
 inline T round_up_to_multiple(T x, T n) {
@@ -81,3 +82,35 @@ vector<int> displacement_from_sendcounts(std::vector<int>& send_counts);
 Distribution distribute_evenly(size_t const collection_size, size_t const comm_size);
 Distribution distribute_randomly(size_t const collection_size, size_t const comm_size, size_t const seed);
 vector<double> generate_test_vector(size_t length, size_t seed);
+
+class Timer {
+public:
+  using duration = decltype(std::chrono::steady_clock::now() -
+                            std::chrono::steady_clock::now());
+
+  Timer() { start(); }
+
+  duration stop() {
+    asm("" ::: "memory");
+    auto end = std::chrono::steady_clock::now();
+    asm("" ::: "memory");
+
+    return end - _start;
+  }
+
+  void start() {
+    asm("" ::: "memory"); // prevent compiler reordering
+    _start = std::chrono::steady_clock::now();
+    asm("" ::: "memory");
+  }
+
+  template <class Func> static duration time_func(Func func) {
+    Timer timer;
+    func();
+    return timer.stop();
+  }
+
+private:
+  std::chrono::time_point<std::chrono::steady_clock> _start;
+};
+

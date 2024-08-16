@@ -46,7 +46,6 @@ double ReproblasSummation::accumulate() {
     double sum;
     if (rank == 0) {
         sum = binned_ddbconv(3, isum);
-        free(isum);
     }
 
     MPI_Bcast(&sum, 1, MPI_DOUBLE, 0, comm);
