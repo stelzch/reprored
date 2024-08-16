@@ -119,8 +119,7 @@ const map<uint64_t, int> KChunkedArray::calculate_k_start_indices() const {
 }
 
 const vector<region> KChunkedArray::calculate_k_regions(const vector<region>& regions) const {
-
-    const auto last_rank = this->regions.rbegin()->first;
+    const auto last_rank = this->start_indices.rbegin()->second;
     const auto last_region = regions.begin() + last_rank;
 
     vector<region> k_regions;
