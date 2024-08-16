@@ -291,7 +291,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                 ASSERT_NEAR(reference_result, std::accumulate(data_array.begin(), data_array.end(), 0.0), 1e-9);
             });
 
-            MPI_Barrier(comm);
+            MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
             for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
                 auto const ranks        = rank_distribution(rng);
@@ -320,9 +320,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
 
                     double computed_result = bts.accumulate();
 
-                    if (rank == 0) {
-                        EXPECT_EQ(computed_result, reference_result);
-                    }
+                    EXPECT_EQ(computed_result, reference_result);
                     ++checks;
                 });
             }
