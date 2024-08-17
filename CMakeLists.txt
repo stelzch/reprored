@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(BinaryTreeSummation)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MPI REQUIRED)
@@ -12,7 +13,7 @@ pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
 list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/k_chunked_array.cpp src/binary_tree.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp)
 
 
-add_definitions(-DAVX)
+add_definitions(-DAVX -DREPRODUCIBLE=${REPRODUCIBLE})
 add_library(binarytreesummation STATIC)
 target_sources(binarytreesummation
     PRIVATE ${WRAPPER_SRC}
