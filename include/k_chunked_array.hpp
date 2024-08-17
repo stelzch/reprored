@@ -3,14 +3,11 @@
 #include <vector>
 #include <map>
 #include <cstdint>
+#include <util.hpp>
 
 using std::vector;
 using std::map;
 
-typedef struct {
-    uint64_t globalStartIndex;
-    uint64_t size;
-} region;
 
 /**
  * This class captures the topology of a distributed array consisting of chunks with constant size K.

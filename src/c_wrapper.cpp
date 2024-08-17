@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <mpi.h>
 #include <binary_tree_summation.h>
-#include <numeric>
 #include <binary_tree_summation.hpp>
 
 /* TODO: Remove global state. This is a crude hack. */
