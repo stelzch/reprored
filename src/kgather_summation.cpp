@@ -20,8 +20,8 @@ KGatherSummation::KGatherSummation(uint64_t rank, const vector<region> regions,
                                    uint64_t k, MPI_Comm comm)
     : comm(comm), rank(rank), k(k), chunked_array(rank, regions, k),
       regions(regions),
-      send_counts(calc_send_counts(chunked_array.get_k_chunks())),
-      displs(calc_displs(chunked_array.get_k_chunks())),
+      send_counts(calc_send_counts()),
+      displs(calc_displs()),
       k_recv_reqs(chunked_array.get_predecessors().size()),
       accumulation_buffer_offset_pre_k(k - chunked_array.get_left_remainder()),
       accumulation_buffer_offset_post_k(k),
@@ -64,7 +64,7 @@ KGatherSummation::~KGatherSummation() {
 }
 
 vector<int>
-KGatherSummation::calc_send_counts(const vector<region> &regions) const {
+KGatherSummation::calc_send_counts() const {
   vector<int> send_counts;
 
   for (const auto &kr : chunked_array.get_k_chunks()) {
@@ -73,7 +73,7 @@ KGatherSummation::calc_send_counts(const vector<region> &regions) const {
 
   return send_counts;
 }
-vector<int> KGatherSummation::calc_displs(const vector<region> &regions) const {
+vector<int> KGatherSummation::calc_displs() const {
   vector<int> displs;
 
   for (const auto &kr : chunked_array.get_k_chunks()) {

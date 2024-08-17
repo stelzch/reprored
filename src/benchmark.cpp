@@ -17,6 +17,9 @@ using std::pair;
 using std::string;
 using std::vector;
 
+constexpr auto MAX_MESSAGE_SIZE_BYTES = 4UL * 1024 * 1024 * 1024;
+constexpr auto MAX_MESSAGE_SIZE_DOUBLES = MAX_MESSAGE_SIZE_BYTES / 8;
+
 void print_usage(char *program_name) {
   fprintf(stderr,
           "Usage: %s n,p,k,r n,p,k,r,...\n\twhere\n\t\tn = length of "
@@ -46,12 +49,13 @@ void print_result(const TestConfig &config, const BenchmarkIteration &it,
          variant, it.iteration, duration.count(), it.result);
 }
 
-template <typename F>
-vector<BenchmarkIteration> measure(F f, uint64_t repetitions) {
+template <typename F, typename G>
+vector<BenchmarkIteration> measure(F prepare, G run, uint64_t repetitions) {
   vector<BenchmarkIteration> results(repetitions);
   for (auto i = 0U; i < repetitions; ++i) {
+    prepare();
     Timer t;
-    double result = f();
+    double result = run();
     const auto duration = t.stop();
 
     results[i].duration = duration;
@@ -100,12 +104,18 @@ int main(int argc, char **argv) {
 
   const auto seed = 42;
 
-  printf("n,p,k,variant,i,time,result\n");
+  if (rank == 0) {
+    printf("n,p,k,variant,i,time,result\n");
+  }
+
   for (auto config : configs) {
     MPI_Comm comm;
     MPI_Comm_split(MPI_COMM_WORLD, rank < config.p, 0, &comm);
 
-    const auto array = generate_test_vector(config.n, seed);
+    vector<double> array;
+    if (rank == 0) {
+      array = generate_test_vector(config.n, seed);
+    }
     const auto distribution = distribute_evenly(config.n, config.p);
     const auto regions = regions_from_distribution(distribution);
     const auto local_array = scatter_array(comm, array, distribution);
@@ -113,14 +123,17 @@ int main(int argc, char **argv) {
     {
       BinaryTreeSummation bts(rank, regions, config.k, comm);
 
-      memcpy(bts.getBuffer(), local_array.data(),
-             distribution.send_counts[rank] * sizeof(double));
+      const auto results = measure(
+          [&bts, &local_array, &distribution, &rank]() {
+            memcpy(bts.getBuffer(), local_array.data(),
+                   distribution.send_counts[rank] * sizeof(double));
+          },
+          [&bts]() { return bts.accumulate(); }, config.r);
 
-      const auto results =
-          measure([&bts]() { return bts.accumulate(); }, config.r);
-
-      for (const auto &result : results) {
-        print_result(config, result, "bts");
+      if (rank == 0) {
+        for (const auto &result : results) {
+          print_result(config, result, "bts");
+        }
       }
     }
 
@@ -130,25 +143,33 @@ int main(int argc, char **argv) {
       memcpy(reproblas.getBuffer(), local_array.data(),
              distribution.send_counts[rank] * sizeof(double));
 
-      const auto results =
-          measure([&reproblas]() { return reproblas.accumulate(); }, config.r);
+      const auto results = measure(
+          []() {}, [&reproblas]() { return reproblas.accumulate(); }, config.r);
 
-      for (const auto &result : results) {
-        print_result(config, result, "reproblas");
+      if (rank == 0) {
+        for (const auto &result : results) {
+          print_result(config, result, "reproblas");
+        }
       }
     }
 
-    {
+    if (config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
       KGatherSummation kgs(rank, regions, config.k, comm);
 
       memcpy(kgs.getBuffer(), local_array.data(),
              distribution.send_counts[rank] * sizeof(double));
 
-      const auto results =
-          measure([&kgs]() { return kgs.accumulate(); }, config.r);
+      const auto results = measure(
+          [&kgs, &local_array, &distribution, &rank]() {
+            memcpy(kgs.getBuffer(), local_array.data(),
+                   distribution.send_counts[rank] * sizeof(double));
+          },
+          [&kgs]() { return kgs.accumulate(); }, config.r);
 
-      for (const auto &result : results) {
-        print_result(config, result, "kgather");
+      if (rank == 0) {
+        for (const auto &result : results) {
+          print_result(config, result, "kgather");
+        }
       }
     }
 
@@ -160,10 +181,12 @@ int main(int argc, char **argv) {
                distribution.send_counts[rank] * sizeof(double));
 
         const auto results =
-            measure([&ars]() { return ars.accumulate(); }, config.r);
+            measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
 
-        for (const auto &result : results) {
-          print_result(config, result, "allreduce");
+        if (rank == 0) {
+          for (const auto &result : results) {
+            print_result(config, result, "allreduce");
+          }
         }
       }
     }

@@ -53,6 +53,6 @@ private:
 
   uint64_t reduction_counter;
 
-  vector<int> calc_send_counts(const vector<region> &regions) const;
-  vector<int> calc_displs(const vector<region> &regions) const;
+  vector<int> calc_send_counts() const;
+  vector<int> calc_displs() const;
 };
