@@ -109,14 +109,19 @@ int main(int argc, char **argv) {
   }
 
   for (auto config : configs) {
+    const bool participating = rank < config.p;
     MPI_Comm comm;
-    MPI_Comm_split(MPI_COMM_WORLD, rank < config.p, 0, &comm);
+    MPI_Comm_split(MPI_COMM_WORLD, participating, 0, &comm);
+
+
+    if (!participating)
+      continue;
 
     int new_rank, new_size;
     MPI_Comm_rank(comm, &new_rank);
     MPI_Comm_size(comm, &new_size);
-    assert(rank == new_rank);
     assert(config.p == new_size);
+    assert(new_rank == rank);
 
 
     vector<double> array;
