@@ -115,6 +115,8 @@ int main(int argc, char **argv) {
     vector<double> array;
     if (rank == 0) {
       array = generate_test_vector(config.n, seed);
+    } else {
+      array.push_back(0); // Prevent array from being optimized away
     }
     const auto distribution = distribute_evenly(config.n, config.p);
     const auto regions = regions_from_distribution(distribution);
