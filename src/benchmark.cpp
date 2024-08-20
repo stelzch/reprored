@@ -112,6 +112,13 @@ int main(int argc, char **argv) {
     MPI_Comm comm;
     MPI_Comm_split(MPI_COMM_WORLD, rank < config.p, 0, &comm);
 
+    int new_rank, new_size;
+    MPI_Comm_rank(comm, &new_rank);
+    MPI_Comm_size(comm, &new_size);
+    assert(rank == new_rank);
+    assert(config.p == new_size);
+
+
     vector<double> array;
     if (rank == 0) {
       array = generate_test_vector(config.n, seed);
