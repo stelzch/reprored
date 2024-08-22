@@ -127,9 +127,8 @@ int main(int argc, char **argv) {
     vector<double> array;
     if (rank == 0) {
       array = generate_test_vector(config.n, seed);
-    } else {
-      array.push_back(0); // Prevent array from being optimized away
     }
+    
     const auto distribution = distribute_evenly(config.n, config.p);
     const auto regions = regions_from_distribution(distribution);
     const auto local_array = scatter_array(comm, array, distribution);
@@ -167,7 +166,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    if (config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
+    if (config.k > 1 && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
       KGatherSummation kgs(rank, regions, config.k, comm);
 
       memcpy(kgs.getBuffer(), local_array.data(),
