@@ -17,7 +17,8 @@ double AllreduceSummation::accumulate() {
 
   // Reducation across communicator
   double sum;
-  MPI_Allreduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, comm);
+  MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, comm);
+  MPI_Bcast(&sum, 1, MPI_DOUBLE, 0, comm);
 
   return sum;
 }
