@@ -46,6 +46,8 @@ ReductionMode env2mode() {
         return BINARY_TREE;
     } else if (mode == "KGATHER") {
         return KGATHER;
+    } else if (mode == "ALLREDUCE") {
+        return ALLREDUCE;
     } else {
         throw std::runtime_error("invalid reduction mode given in environment variable REPR_REDUCE");
     }

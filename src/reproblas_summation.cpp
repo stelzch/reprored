@@ -21,7 +21,6 @@ ReproblasSummation::~ReproblasSummation() {
 double *ReproblasSummation::getBuffer() { return buffer.data(); }
 
 double ReproblasSummation::accumulate() {
-    printf("reducing with reproblas\n");
   /* Adopted from the ReproBLAS MPI_sum_sine.c example, line 105 onwards */
 
   binned_dbsetzero(3, local_isum);
