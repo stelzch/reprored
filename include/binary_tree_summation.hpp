@@ -1,4 +1,5 @@
 #include "binary_tree.hpp"
+#include "summation.hpp"
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -15,7 +16,7 @@ using std::array;
 using std::map;
 using std::vector;
 
-class BinaryTreeSummation {
+class BinaryTreeSummation : public Summation {
 public:
   /** Instantiate new binary tree accumulator.
    * For a reproducible result, the order of numbers must remain the same
@@ -29,12 +30,12 @@ public:
 
   virtual ~BinaryTreeSummation();
 
-  double *getBuffer();
+  double *getBuffer() override;
   void storeSummand(uint64_t localIndex, double val);
 
   /* Sum all numbers. Will return the total sum on rank 0
    */
-  double accumulate(void);
+  double accumulate(void) override;
 
   /* Return the average number of nanoseconds spend in total on waiting for
    * intermediary results from other hosts

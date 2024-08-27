@@ -1,4 +1,5 @@
 #include "binary_tree.hpp"
+#include "summation.hpp"
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -15,19 +16,19 @@ using std::array;
 using std::map;
 using std::vector;
 
-class KGatherSummation {
+class KGatherSummation : public Summation {
 public:
   KGatherSummation(uint64_t rank, const vector<region> regions, uint64_t K = 1,
                    MPI_Comm comm = MPI_COMM_WORLD);
 
   virtual ~KGatherSummation();
 
-  double *getBuffer();
+  double *getBuffer() override;
   void storeSummand(uint64_t localIndex, double val);
 
   /* Sum all numbers. Will return the total sum on rank 0
    */
-  double accumulate(void);
+  double accumulate(void) override;
 
   const int get_rank() const;
 

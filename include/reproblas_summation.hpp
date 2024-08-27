@@ -1,5 +1,6 @@
 #pragma once
 
+#include "summation.hpp"
 #include "util.hpp"
 #include <mpi.h>
 #include <vector>
@@ -13,13 +14,13 @@ extern "C" {
 
 using std::vector;
 
-class ReproblasSummation {
+class ReproblasSummation : public Summation {
 public:
   ReproblasSummation(MPI_Comm comm, size_t local_summands);
-  ~ReproblasSummation();
+  virtual ~ReproblasSummation();
 
-  double *getBuffer();
-  double accumulate();
+  double *getBuffer() override;
+  double accumulate() override;
 
 private:
   const size_t local_summands;
