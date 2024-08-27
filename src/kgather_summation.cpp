@@ -220,6 +220,7 @@ void KGatherSummation::linear_sum_k() {
 /* Sum all numbers. Will return the total sum on rank 0
  */
 double KGatherSummation::accumulate(void) {
+    printf("reducing with kgather, k=%lu\n", k);
   if (k != 1 && chunked_array.get_local_size() > 0) {
     linear_sum_k();
   }

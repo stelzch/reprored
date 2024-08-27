@@ -12,6 +12,7 @@ AllreduceSummation::~AllreduceSummation() {}
 double *AllreduceSummation::getBuffer() { return buffer.data(); }
 
 double AllreduceSummation::accumulate() {
+  printf("reducing with allreduce\n");
   auto local_sum =
       std::reduce(buffer.begin(), buffer.end(), 0.0, std::plus<double>());
 

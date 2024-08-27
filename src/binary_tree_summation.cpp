@@ -193,6 +193,7 @@ void BinaryTreeSummation::linear_sum_k() {
 /* Sum all numbers. Will return the total sum on rank 0
  */
 double BinaryTreeSummation::accumulate(void) {
+printf("reducing with bts, k=%lu", k);
   if (k != 1 && chunked_array.get_local_size() > 0) {
     linear_sum_k();
   }
