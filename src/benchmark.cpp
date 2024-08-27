@@ -113,7 +113,6 @@ int main(int argc, char **argv) {
     MPI_Comm comm;
     MPI_Comm_split(MPI_COMM_WORLD, participating, 0, &comm);
 
-
     if (!participating)
       continue;
 
@@ -123,12 +122,11 @@ int main(int argc, char **argv) {
     assert(config.p == new_size);
     assert(new_rank == rank);
 
-
     vector<double> array;
     if (rank == 0) {
       array = generate_test_vector(config.n, seed);
     }
-    
+
     const auto distribution = distribute_evenly(config.n, config.p);
     const auto regions = regions_from_distribution(distribution);
     const auto local_array = scatter_array(comm, array, distribution);

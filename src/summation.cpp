@@ -1,5 +1,3 @@
 #include "summation.hpp"
 
-Summation::~Summation() {
-
-}
+Summation::~Summation() {}

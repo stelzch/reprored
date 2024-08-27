@@ -1,23 +1,18 @@
 #include "allreduce_summation.hpp"
+#include <allreduce_summation.hpp>
 #include <binary_tree_summation.h>
 #include <binary_tree_summation.hpp>
 #include <kgather_summation.hpp>
-#include <allreduce_summation.hpp>
-#include <reproblas_summation.hpp>
 #include <mpi.h>
+#include <reproblas_summation.hpp>
 #include <stdint.h>
-#include <vector>
 #include <string>
+#include <vector>
 
 /* TODO: Remove global state. This is a crude hack. */
 MPI_Comm default_communicator = MPI_COMM_WORLD;
 
-enum ReductionMode {
-    ALLREDUCE,
-    REPROBLAS,
-    BINARY_TREE,
-    KGATHER
-};
+enum ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER };
 ReductionMode env2mode();
 uint64_t env2k();
 
@@ -25,50 +20,49 @@ uint64_t env2k();
 ReductionMode global_reduction_mode = env2mode();
 uint64_t global_k = env2k();
 
-
 void set_default_reduction_context_communicator(void *communicator) {
   MPI_Comm comm = static_cast<MPI_Comm>(communicator);
   default_communicator = comm;
 }
 
 ReductionMode env2mode() {
-    const char *mode_env = getenv("REPR_REDUCE");
+  const char *mode_env = getenv("REPR_REDUCE");
 
-    if (mode_env == nullptr) {
-        return ALLREDUCE;
-    }
+  if (mode_env == nullptr) {
+    return ALLREDUCE;
+  }
 
-    const auto mode = std::string(mode_env);
+  const auto mode = std::string(mode_env);
 
-    if (mode == "REPROBLAS") {
-        return REPROBLAS;
-    } else if (mode == "BINARY_TREE") {
-        return BINARY_TREE;
-    } else if (mode == "KGATHER") {
-        return KGATHER;
-    } else if (mode == "ALLREDUCE") {
-        return ALLREDUCE;
-    } else {
-        throw std::runtime_error("invalid reduction mode given in environment variable REPR_REDUCE");
-    }
+  if (mode == "REPROBLAS") {
+    return REPROBLAS;
+  } else if (mode == "BINARY_TREE") {
+    return BINARY_TREE;
+  } else if (mode == "KGATHER") {
+    return KGATHER;
+  } else if (mode == "ALLREDUCE") {
+    return ALLREDUCE;
+  } else {
+    throw std::runtime_error(
+        "invalid reduction mode given in environment variable REPR_REDUCE");
+  }
 }
 
 uint64_t env2k() {
-    const char *k_env = getenv("REPR_REDUCE_K");
-    if(k_env == nullptr) {
-        return 1;
-    }
+  const char *k_env = getenv("REPR_REDUCE_K");
+  if (k_env == nullptr) {
+    return 1;
+  }
 
-    const auto k = std::stoul(std::string(k_env));
+  const auto k = std::stoul(std::string(k_env));
 
-    if (k < 1) {
-        throw std::runtime_error("Invalid choice of k in environment variable REPR_REDUCE_K");
-    }
+  if (k < 1) {
+    throw std::runtime_error(
+        "Invalid choice of k in environment variable REPR_REDUCE_K");
+  }
 
-    return k;
+  return k;
 }
-
-
 
 ReductionContext new_reduction_context(int global_start_idx,
                                        int local_summands) {
@@ -93,41 +87,37 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx,
   MPI_Comm_rank(comm, &rank);
 
   switch (global_reduction_mode) {
-      case BINARY_TREE:
-          {
-            region r;
-            r.globalStartIndex = global_start_idx;
-            r.size = local_summands;
+  case BINARY_TREE: {
+    region r;
+    r.globalStartIndex = global_start_idx;
+    r.size = local_summands;
 
-            std::vector<region> regions(size, r);
+    std::vector<region> regions(size, r);
 
-            MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region),
-                            MPI_BYTE, comm);
+    MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region),
+                  MPI_BYTE, comm);
 
-            return new BinaryTreeSummation(rank, std::move(regions), k, comm);
-        }
-    case KGATHER:
-          {
-            region r;
-            r.globalStartIndex = global_start_idx;
-            r.size = local_summands;
+    return new BinaryTreeSummation(rank, std::move(regions), k, comm);
+  }
+  case KGATHER: {
+    region r;
+    r.globalStartIndex = global_start_idx;
+    r.size = local_summands;
 
-            std::vector<region> regions(size, r);
+    std::vector<region> regions(size, r);
 
-            MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region),
-                            MPI_BYTE, comm);
+    MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region),
+                  MPI_BYTE, comm);
 
-            return new KGatherSummation(rank, std::move(regions), k, comm);
-          }
-    case REPROBLAS:
-          {
-              return new ReproblasSummation(comm, local_summands);
-          }
-    case ALLREDUCE:
-    default:
-          {
-              return new AllreduceSummation(comm, local_summands);
-          }
+    return new KGatherSummation(rank, std::move(regions), k, comm);
+  }
+  case REPROBLAS: {
+    return new ReproblasSummation(comm, local_summands);
+  }
+  case ALLREDUCE:
+  default: {
+    return new AllreduceSummation(comm, local_summands);
+  }
   }
 }
 
@@ -149,14 +139,14 @@ double reproducible_reduce(ReductionContext ctx) {
 
   double result = ptr->accumulate();
 #ifdef TRACE
-union num n;
-n.val = result;
+  union num n;
+  n.val = result;
 
-printf("reproducible_reduce call %lu = %f (0x", reduction_counter, result);
-for (int i = 0; i < 8; i++) {
+  printf("reproducible_reduce call %lu = %f (0x", reduction_counter, result);
+  for (int i = 0; i < 8; i++) {
     printf("%02x", n.bytes[i]);
-}
-printf(")\n");
+  }
+  printf(")\n");
 #endif
 
   ++reduction_counter;
