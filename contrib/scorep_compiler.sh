@@ -1,0 +1,2 @@
+#!/bin/sh
+scorep mpic++ $*

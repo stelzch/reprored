@@ -10,6 +10,14 @@ find_package(MPI REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
 
+
+option(USE_SCOREP "Enable instrumentation with ScoreP" OFF)
+
+if(USE_SCOREP)
+    set(CMAKE_C_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
+    set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
+endif()
+
 list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/k_chunked_array.cpp src/binary_tree.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp src/summation.cpp)
 
 
