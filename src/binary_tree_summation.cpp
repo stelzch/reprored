@@ -14,6 +14,10 @@
 #include <immintrin.h>
 #endif
 
+#ifdef SCOREP
+#include <scorep/SCOREP_User.h>
+#endif
+
 using namespace std;
 using namespace std::string_literals;
 
@@ -193,9 +197,25 @@ void BinaryTreeSummation::linear_sum_k() {
 /* Sum all numbers. Will return the total sum on rank 0
  */
 double BinaryTreeSummation::accumulate(void) {
+#ifdef SCOREP
+    SCOREP_USER_REGION_DEFINE(linear_sum_phase);
+    SCOREP_USER_REGION_DEFINE(tree_reduction_phase);
+
+    SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_COMMON);
+    SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
+    SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
+#endif
+
   if (k != 1 && chunked_array.get_local_size() > 0) {
     linear_sum_k();
   }
+
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(linear_sum_phase);
+  SCOREP_USER_REGION_BEGIN(tree_reduction_phase, "tree_reduction_phase", SCOREP_USER_REGION_TYPE_COMMON);
+  SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
+  SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
+#endif
 
   for (auto summand : binary_tree.get_rank_intersecting_summands()) {
     if (binary_tree.subtree_size(summand) > 16) {
@@ -224,6 +244,10 @@ double BinaryTreeSummation::accumulate(void) {
   MPI_Bcast(&result, 1, MPI_DOUBLE, root_rank, comm);
 
   ++reduction_counter;
+
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(tree_reduction_phase);
+#endif
 
   return result;
 }

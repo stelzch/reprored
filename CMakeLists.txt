@@ -41,6 +41,10 @@ target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${repro
 target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
 target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 
+if(USE_SCOREP)
+    target_compile_definitions(binarytreesummation PRIVATE -DSCOREP)
+endif()
+
 if(BUILD_EXAMPLE_EXECUTABLE)
     add_executable(sum src/main.cpp src/io.cpp)
     target_link_libraries(sum PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
