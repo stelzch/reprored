@@ -27,7 +27,7 @@ target_sources(binarytreesummation
     PRIVATE ${WRAPPER_SRC}
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
+target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx -flto)
 target_include_directories(binarytreesummation 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
