@@ -9,6 +9,10 @@
 #include <utility>
 #include <vector>
 
+#ifdef SCOREP
+#include <scorep/SCOREP_User.h>
+#endif
+
 #include <binary_tree_summation.hpp>
 #include <kgather_summation.hpp>
 #include <reproblas_summation.hpp>
@@ -88,6 +92,13 @@ vector<TestConfig> collect_arguments(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+#ifdef SCOREP
+    SCOREP_USER_REGION_DEFINE(region_benchmark_loop);
+    SCOREP_USER_REGION_DEFINE(region_bts);
+    SCOREP_USER_REGION_DEFINE(region_kgather);
+    SCOREP_USER_REGION_DEFINE(region_allreduce);
+    SCOREP_USER_REGION_DEFINE(region_reproblas);
+#endif
   MPI_Init(&argc, &argv);
 
   int rank;
@@ -130,33 +141,49 @@ int main(int argc, char **argv) {
     const auto distribution = distribute_evenly(config.n, config.p);
     const auto regions = regions_from_distribution(distribution);
     const auto local_array = scatter_array(comm, array, distribution);
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_benchmark_loop, "benchmark", SCOREP_USER_REGION_TYPE_LOOP);
+    SCOREP_USER_PARAMETER_UINT64("n", config.n);
+    SCOREP_USER_PARAMETER_UINT64("p", config.p);
+    SCOREP_USER_PARAMETER_UINT64("k", config.k);
+#endif
 
     {
       BinaryTreeSummation bts(rank, regions, config.k, comm);
 
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_bts, "binarytreesummation", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
       const auto results = measure(
           [&bts, &local_array, &distribution, &rank]() {
             memcpy(bts.getBuffer(), local_array.data(),
                    distribution.send_counts[rank] * sizeof(double));
           },
           [&bts]() { return bts.accumulate(); }, config.r);
-
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_bts);
+#endif
       if (rank == 0) {
         for (const auto &result : results) {
           print_result(config, result, "bts");
         }
       }
     }
-
     {
       ReproblasSummation reproblas(comm, regions[rank].size);
 
       memcpy(reproblas.getBuffer(), local_array.data(),
              distribution.send_counts[rank] * sizeof(double));
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_reproblas, "reproblas", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
 
       const auto results = measure(
           []() {}, [&reproblas]() { return reproblas.accumulate(); }, config.r);
 
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_reproblas);
+#endif
       if (rank == 0) {
         for (const auto &result : results) {
           print_result(config, result, "reproblas");
@@ -170,12 +197,18 @@ int main(int argc, char **argv) {
       memcpy(kgs.getBuffer(), local_array.data(),
              distribution.send_counts[rank] * sizeof(double));
 
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_kgather, "kgather", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
       const auto results = measure(
           [&kgs, &local_array, &distribution, &rank]() {
             memcpy(kgs.getBuffer(), local_array.data(),
                    distribution.send_counts[rank] * sizeof(double));
           },
           [&kgs]() { return kgs.accumulate(); }, config.r);
+#if SCOREP
+    SCOREP_USER_REGION_END(region_kgather);
+#endif
 
       if (rank == 0) {
         for (const auto &result : results) {
@@ -190,10 +223,16 @@ int main(int argc, char **argv) {
 
         memcpy(ars.getBuffer(), local_array.data(),
                distribution.send_counts[rank] * sizeof(double));
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_allreduce, "allreduce", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
 
         const auto results =
             measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
 
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(region_allreduce);
+#endif
         if (rank == 0) {
           for (const auto &result : results) {
             print_result(config, result, "allreduce");
@@ -201,6 +240,9 @@ int main(int argc, char **argv) {
         }
       }
     }
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(region_benchmark_loop);
+#endif
   }
 
   MPI_Finalize();

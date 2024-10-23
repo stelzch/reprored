@@ -69,6 +69,13 @@ void BinaryTreeSummation::storeSummand(uint64_t localIndex, double val) {
 }
 
 void BinaryTreeSummation::linear_sum_k() {
+#ifdef SCOREP
+    SCOREP_USER_REGION_DEFINE(region_send_remainder);
+    SCOREP_USER_REGION_DEFINE(region_trigger_receive);
+    SCOREP_USER_REGION_DEFINE(region_sum_local_ktuples);
+    SCOREP_USER_REGION_DEFINE(region_wait_mpi);
+    SCOREP_USER_REGION_BEGIN(region_send_remainder, "send remainder", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
   MPI_Request send_req = MPI_REQUEST_NULL;
 
   if (chunked_array.get_right_remainder() > 0 &&
@@ -99,6 +106,10 @@ void BinaryTreeSummation::linear_sum_k() {
     MPI_Isend(&acc, 1, MPI_DOUBLE, chunked_array.get_successor(),
               MESSAGEBUFFER_MPI_TAG, comm, &send_req);
   }
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_send_remainder);
+    SCOREP_USER_REGION_BEGIN(region_trigger_receive, "trigger receive", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
 
   // Start receive requests for the left remainder
   // TODO: ask someone with more MPI experience if this is really necessary
@@ -129,12 +140,17 @@ void BinaryTreeSummation::linear_sum_k() {
     }
   }
 
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_trigger_receive);
+    SCOREP_USER_REGION_BEGIN(region_sum_local_ktuples, "sum local k-tuples", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+
   // Sum local k-tuples that do not overlap with PE-boundaries
   const bool has_left_remainder = (chunked_array.get_left_remainder() > 0);
   uint64_t target_idx = has_left_remainder ? 1U : 0U;
-  const auto limit = chunked_array.get_local_size();
+  //const auto limit = ;
   for (uint64_t i = chunked_array.get_left_remainder();
-       i + k - 1 < limit; i += k) {
+       i + k - 1 < chunked_array.get_local_size(); i += k) {
     accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] =
         std::accumulate(
             &accumulation_buffer[accumulation_buffer_offset_pre_k + i],
@@ -155,6 +171,10 @@ void BinaryTreeSummation::linear_sum_k() {
             0.0);
   }
 
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_sum_local_ktuples);
+    SCOREP_USER_REGION_BEGIN(region_wait_mpi, "wait for other remainders", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
   // Make sure the send request has gone through before waiting on received
   // messages
   if (send_req != MPI_REQUEST_NULL) {
@@ -192,6 +212,10 @@ void BinaryTreeSummation::linear_sum_k() {
         left_remainder_accumulator;
   }
 
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(region_wait_mpi);
+#endif
+
   assert(target_idx == binary_tree.get_local_size());
 }
 
@@ -201,8 +225,9 @@ double BinaryTreeSummation::accumulate(void) {
 #ifdef SCOREP
     SCOREP_USER_REGION_DEFINE(linear_sum_phase);
     SCOREP_USER_REGION_DEFINE(tree_reduction_phase);
+    SCOREP_USER_REGION_DEFINE(broadcast_phase);
 
-    SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_FUNCTION);
+    SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_COMMON);
     SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
     SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
 #endif
@@ -213,7 +238,7 @@ double BinaryTreeSummation::accumulate(void) {
 
 #ifdef SCOREP
   SCOREP_USER_REGION_END(linear_sum_phase);
-  SCOREP_USER_REGION_BEGIN(tree_reduction_phase, "tree_reduction_phase", SCOREP_USER_REGION_TYPE_FUNCTION);
+  SCOREP_USER_REGION_BEGIN(tree_reduction_phase, "tree_reduction_phase", SCOREP_USER_REGION_TYPE_COMMON);
   SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
   SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
 #endif
@@ -242,12 +267,17 @@ double BinaryTreeSummation::accumulate(void) {
     result = accumulate(0);
   }
 
+#ifdef SCOREP
+  SCOREP_USER_REGION_END(tree_reduction_phase);
+  SCOREP_USER_REGION_BEGIN(broadcast_phase, "broadcast phase", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+
   MPI_Bcast(&result, 1, MPI_DOUBLE, root_rank, comm);
 
   ++reduction_counter;
 
 #ifdef SCOREP
-  SCOREP_USER_REGION_END(tree_reduction_phase);
+  SCOREP_USER_REGION_END(broadcast_phase);
 #endif
 
   return result;
