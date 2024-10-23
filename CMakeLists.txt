@@ -12,6 +12,7 @@ pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
 
 
 option(USE_SCOREP "Enable instrumentation with ScoreP" OFF)
+option(ENABLE_LTO "Enable link-time-optimizations" OFF)
 
 if(USE_SCOREP)
     set(CMAKE_C_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
@@ -27,7 +28,15 @@ target_sources(binarytreesummation
     PRIVATE ${WRAPPER_SRC}
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx -flto)
+target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
+
+if(USE_GPROF)
+    target_compile_options(binarytreesummation PRIVATE -pg)
+endif()
+
+if(NOT USE_SCOREP AND ENABLE_LTO)
+    target_compile_options(binarytreesummation PRIVATE -flto)
+endif()
 target_include_directories(binarytreesummation 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -55,6 +64,10 @@ if(BUILD_BENCHMARK)
     add_executable(benchmark src/benchmark.cpp)
     target_link_libraries(benchmark PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
     target_compile_options(benchmark PRIVATE -Wall -O3 -ggdb -mavx)
+    if(USE_GPROF)
+        target_compile_options(benchmark PRIVATE -pg)
+        target_link_options(benchmark PRIVATE -pg)
+    endif()
 endif()
 
 if(BUILD_TESTS)
