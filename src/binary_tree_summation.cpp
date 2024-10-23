@@ -107,7 +107,7 @@ void BinaryTreeSummation::linear_sum_k() {
   double left_remainder_accumulator;
   uint64_t left_remainder_running_index = 0;
 
-  for (int i = 0U; i < chunked_array.get_predecessors().size(); ++i) {
+  for (size_t i = 0U; i < chunked_array.get_predecessors().size(); ++i) {
     const auto other_rank = chunked_array.get_predecessors()[i];
     if (i == 0) {
       // assert((k_regions[other_rank].size > 0) || (other_rank ==
@@ -132,8 +132,9 @@ void BinaryTreeSummation::linear_sum_k() {
   // Sum local k-tuples that do not overlap with PE-boundaries
   const bool has_left_remainder = (chunked_array.get_left_remainder() > 0);
   uint64_t target_idx = has_left_remainder ? 1U : 0U;
+  const auto limit = chunked_array.get_local_size();
   for (uint64_t i = chunked_array.get_left_remainder();
-       i + k - 1 < chunked_array.get_local_size(); i += k) {
+       i + k - 1 < limit; i += k) {
     accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] =
         std::accumulate(
             &accumulation_buffer[accumulation_buffer_offset_pre_k + i],
@@ -201,7 +202,7 @@ double BinaryTreeSummation::accumulate(void) {
     SCOREP_USER_REGION_DEFINE(linear_sum_phase);
     SCOREP_USER_REGION_DEFINE(tree_reduction_phase);
 
-    SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_COMMON);
+    SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_FUNCTION);
     SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
     SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
 #endif
@@ -212,7 +213,7 @@ double BinaryTreeSummation::accumulate(void) {
 
 #ifdef SCOREP
   SCOREP_USER_REGION_END(linear_sum_phase);
-  SCOREP_USER_REGION_BEGIN(tree_reduction_phase, "tree_reduction_phase", SCOREP_USER_REGION_TYPE_COMMON);
+  SCOREP_USER_REGION_BEGIN(tree_reduction_phase, "tree_reduction_phase", SCOREP_USER_REGION_TYPE_FUNCTION);
   SCOREP_USER_PARAMETER_UINT64("parameter_k", k);
   SCOREP_USER_PARAMETER_UINT64("tree_size", binary_tree.get_global_size());
 #endif
