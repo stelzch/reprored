@@ -15,10 +15,10 @@ typedef void * ReductionContext;
 /* TODO: remove void * type and replace with MPI_Comm. Requires MPI inclusion in every source file that includes
  * this header, so we avoid it here
  */
-void set_default_reduction_context_communicator(void *communicator);
+void set_default_reduction_context_communicator(uintptr_t communicator);
 ReductionContext new_reduction_context(int global_start_idx, int local_summands);
-ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, void *communicator);
-ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_summands, void *communicator, int k);
+ReductionContext new_reduction_context_comm(int global_start_idx, int local_summands, uintptr_t communicator);
+ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_summands, uintptr_t communicator, int k);
 void store_summand(ReductionContext context, uint64_t local_idx, double val);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);

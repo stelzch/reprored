@@ -45,7 +45,9 @@ const void MessageBuffer::receive(const int sourceRank) {
            sourceRank, MESSAGEBUFFER_MPI_TAG, comm, &status);
   awaitedNumbers++;
 
-  const int receivedEntries = status._ucount / sizeof(MessageBufferEntry);
+  int receivedBytes = 0;
+  MPI_Get_count(&status, MPI_BYTE, &receivedBytes);
+  const int receivedEntries = receivedBytes / sizeof(MessageBufferEntry);
 
   for (int i = 0; i < receivedEntries; i++) {
     MessageBufferEntry entry = buffer[i];

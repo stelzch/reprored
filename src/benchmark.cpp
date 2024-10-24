@@ -37,6 +37,8 @@ struct TestConfig {
   uint64_t p;
   uint64_t k;
   uint64_t r;
+
+  TestConfig(uint64_t n, uint64_t p, uint64_t k, uint64_t r) : n{n}, p{p}, k{k}, r{r} {}
 };
 
 struct BenchmarkIteration {

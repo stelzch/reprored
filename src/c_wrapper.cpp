@@ -20,8 +20,8 @@ uint64_t env2k();
 ReductionMode global_reduction_mode = env2mode();
 uint64_t global_k = env2k();
 
-void set_default_reduction_context_communicator(void *communicator) {
-  MPI_Comm comm = static_cast<MPI_Comm>(communicator);
+void set_default_reduction_context_communicator(uintptr_t communicator) {
+  MPI_Comm comm = reinterpret_cast<MPI_Comm>(communicator);
   default_communicator = comm;
 }
 
@@ -67,20 +67,20 @@ uint64_t env2k() {
 ReductionContext new_reduction_context(int global_start_idx,
                                        int local_summands) {
   return new_reduction_context_comm(global_start_idx, local_summands,
-                                    static_cast<void *>(default_communicator));
+                                    reinterpret_cast<uintptr_t>(default_communicator));
 }
 
 ReductionContext new_reduction_context_comm(int global_start_idx,
                                             int local_summands,
-                                            void *communicator) {
+                                            uintptr_t communicator) {
   return new_reduction_context_comm_k(global_start_idx, local_summands,
                                       communicator, global_k);
 }
 
 ReductionContext new_reduction_context_comm_k(int global_start_idx,
                                               int local_summands,
-                                              void *communicator, int k) {
-  MPI_Comm comm = static_cast<MPI_Comm>(communicator);
+                                              uintptr_t communicator, int k) {
+  MPI_Comm comm = reinterpret_cast<MPI_Comm>(communicator);
 
   int size, rank;
   MPI_Comm_size(comm, &size);
