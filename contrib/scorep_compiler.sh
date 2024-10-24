@@ -1,2 +1,2 @@
 #!/bin/sh
-scorep --nocompiler --user mpic++ $*
+scorep --nocompiler --user mpicxx $*
