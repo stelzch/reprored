@@ -152,8 +152,9 @@ void KGatherSummation::linear_sum_k() {
   // Sum local k-tuples that do not overlap with PE-boundaries
   const bool has_left_remainder = (chunked_array.get_left_remainder() > 0);
   uint64_t target_idx = has_left_remainder ? 1U : 0U;
+  const auto limit = chunked_array.get_local_size();
   for (uint64_t i = chunked_array.get_left_remainder();
-       i + k - 1 < chunked_array.get_local_size(); i += k) {
+       i + k - 1 < limit; i += k) {
     accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] =
         std::accumulate(
             &accumulation_buffer[accumulation_buffer_offset_pre_k + i],
