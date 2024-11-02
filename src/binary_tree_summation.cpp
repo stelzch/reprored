@@ -178,13 +178,13 @@ void BinaryTreeSummation::linear_sum_k() {
   // Make sure the send request has gone through before waiting on received
   // messages
   if (send_req != MPI_REQUEST_NULL) {
-    MPI_Wait(&send_req, nullptr);
+    MPI_Wait(&send_req, MPI_STATUS_IGNORE);
   }
 
   // Sum received values from left remainder
   if (has_left_remainder) {
     left_remainder_running_index = 0;
-    MPI_Wait(&k_recv_reqs[0], nullptr);
+    MPI_Wait(&k_recv_reqs[0], MPI_STATUS_IGNORE);
 
     // TODO: if possible, join this loop with the MPI_Irecv loop above
     for (int i = 1U; i < chunked_array.get_predecessors().size(); ++i) {
@@ -192,7 +192,7 @@ void BinaryTreeSummation::linear_sum_k() {
       const auto elements_to_sum =
           regions.at(other_rank)
               .size; // We receive all numbers the other rank holds
-      MPI_Wait(&k_recv_reqs[i], nullptr);
+      MPI_Wait(&k_recv_reqs[i], MPI_STATUS_IGNORE);
 
       left_remainder_accumulator = std::accumulate(
           &accumulation_buffer[left_remainder_running_index],
