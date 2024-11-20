@@ -245,6 +245,7 @@ int main(int argc, char **argv) {
 #ifdef SCOREP
   SCOREP_USER_REGION_END(region_benchmark_loop);
 #endif
+    MPI_Comm_free(&comm);
   }
 
   MPI_Finalize();
