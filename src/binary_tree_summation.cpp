@@ -90,6 +90,9 @@ void BinaryTreeSummation::linear_sum_k() {
               chunked_array.get_local_size(), MPI_DOUBLE,
               chunked_array.get_successor(), MESSAGEBUFFER_MPI_TAG, comm,
               &send_req);
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_send_remainder);
+#endif
     return; // We are done here
 
   } else if (chunked_array.get_right_remainder() > 0 &&
