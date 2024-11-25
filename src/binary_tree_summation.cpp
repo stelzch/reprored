@@ -154,14 +154,13 @@ void BinaryTreeSummation::linear_sum_k() {
   {
     const auto start = chunked_array.get_left_remainder();
     const auto limit = chunked_array.get_local_size() - k + 1;
-    for (uint64_t i = start; i < limit; i += k) {
-        const auto buffer_index = accumulation_buffer_offset_post_k + target_idx++;
-
-        accumulation_buffer[buffer_index] = 0.0;
+    for (auto i = start; i < limit; i += k) {
+        double acc = 0.0;
 
         for (auto j = 0U; j < k; ++j) {
-            accumulation_buffer[buffer_index] = accumulation_buffer[accumulation_buffer_offset_pre_k + i];
+            acc += accumulation_buffer[accumulation_buffer_offset_pre_k + i + j];
         }
+        accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] = acc;
     }
   }
 
