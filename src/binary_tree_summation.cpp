@@ -151,14 +151,18 @@ void BinaryTreeSummation::linear_sum_k() {
   // Sum local k-tuples that do not overlap with PE-boundaries
   const bool has_left_remainder = (chunked_array.get_left_remainder() > 0);
   uint64_t target_idx = has_left_remainder ? 1U : 0U;
-  //const auto limit = ;
-  for (uint64_t i = chunked_array.get_left_remainder();
-       i + k - 1 < chunked_array.get_local_size(); i += k) {
-    accumulation_buffer[accumulation_buffer_offset_post_k + target_idx++] =
-        std::accumulate(
-            &accumulation_buffer[accumulation_buffer_offset_pre_k + i],
-            &accumulation_buffer[accumulation_buffer_offset_pre_k + i + k],
-            0.0);
+  {
+    const auto start = chunked_array.get_left_remainder();
+    const auto limit = chunked_array.get_local_size() - k + 1;
+    for (uint64_t i = start; i < limit; i += k) {
+        const auto buffer_index = accumulation_buffer_offset_post_k + target_idx++;
+
+        accumulation_buffer[buffer_index] = 0.0;
+
+        for (auto j = 0U; j < k; ++j) {
+            accumulation_buffer[buffer_index] = accumulation_buffer[accumulation_buffer_offset_pre_k + i];
+        }
+    }
   }
 
   // On the last rank manually sum right remainder since it can not be sent
