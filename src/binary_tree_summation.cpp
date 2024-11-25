@@ -153,8 +153,8 @@ void BinaryTreeSummation::linear_sum_k() {
   uint64_t target_idx = has_left_remainder ? 1U : 0U;
   {
     const auto start = chunked_array.get_left_remainder();
-    const auto limit = chunked_array.get_local_size() - k + 1;
-    for (auto i = start; i < limit; i += k) {
+    const auto limit = chunked_array.get_local_size();
+    for (auto i = start; i - k + 1 < limit; i += k) {
         double acc = 0.0;
 
         for (auto j = 0U; j < k; ++j) {
