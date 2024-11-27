@@ -231,6 +231,7 @@ double BinaryTreeSummation::accumulate(void) {
 #ifdef SCOREP
     SCOREP_USER_REGION_DEFINE(linear_sum_phase);
     SCOREP_USER_REGION_DEFINE(tree_reduction_phase);
+    SCOREP_USER_REGION_DEFINE(barrier_phase);
     SCOREP_USER_REGION_DEFINE(broadcast_phase);
 
     SCOREP_USER_REGION_BEGIN(linear_sum_phase, "linear_sum_phase", SCOREP_USER_REGION_TYPE_COMMON);
@@ -274,6 +275,9 @@ double BinaryTreeSummation::accumulate(void) {
   }
 
 #ifdef SCOREP
+  SCOREP_USER_REGION_BEGIN(barrier_phase, "barrier", SCOREP_USER_REGION_TYPE_COMMON);
+  MPI_Barrier(comm);
+  SCOREP_USER_REGION_END(barrier_phase);
   SCOREP_USER_REGION_END(tree_reduction_phase);
   SCOREP_USER_REGION_BEGIN(broadcast_phase, "broadcast phase", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
