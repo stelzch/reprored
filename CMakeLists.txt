@@ -13,35 +13,38 @@ pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
 
 option(USE_SCOREP "Enable instrumentation with ScoreP" OFF)
 option(ENABLE_LTO "Enable link-time-optimizations" OFF)
+option(BUILD_BENCHMARK "Build benchmark executable" ON)
+option(BUILD_TESTS "Build unit tests" ON)
 
-if(USE_SCOREP)
+if (USE_SCOREP)
     set(CMAKE_C_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
     set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
-endif()
+endif ()
 
 list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp src/summation.cpp)
 
 
 add_definitions(-DAVX -DREPRODUCIBLE=${REPRODUCIBLE})
-add_library(binarytreesummation STATIC)
+add_library(binarytreesummation STATIC
+        include/dual_tree_topology.hpp)
 target_sources(binarytreesummation
-    PRIVATE ${WRAPPER_SRC}
-    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
+        PRIVATE ${WRAPPER_SRC}
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
 target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
 
-if(USE_GPROF)
+if (USE_GPROF)
     target_compile_options(binarytreesummation PRIVATE -pg)
-endif()
+endif ()
 
-if(NOT USE_SCOREP AND ENABLE_LTO)
+if (NOT USE_SCOREP AND ENABLE_LTO)
     target_compile_options(binarytreesummation PRIVATE -flto)
-endif()
-target_include_directories(binarytreesummation 
-    PUBLIC 
+endif ()
+target_include_directories(binarytreesummation
+        PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    PRIVATE
+        PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
@@ -50,33 +53,33 @@ target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${repro
 target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
 target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 
-if(USE_SCOREP)
+if (USE_SCOREP)
     target_compile_definitions(binarytreesummation PRIVATE -DSCOREP)
-endif()
+endif ()
 
-if(BUILD_EXAMPLE_EXECUTABLE)
+if (BUILD_EXAMPLE_EXECUTABLE)
     add_executable(sum src/main.cpp src/io.cpp)
     target_link_libraries(sum PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
     target_compile_options(sum PRIVATE -Wall -O3 -ggdb -mavx)
-endif()
+endif ()
 
-if(BUILD_BENCHMARK)
+if (BUILD_BENCHMARK)
     add_executable(benchmark src/benchmark.cpp)
     target_link_libraries(benchmark PRIVATE binarytreesummation MPI::MPI_C MPI::MPI_CXX)
     target_compile_options(benchmark PRIVATE -Wall -O3 -ggdb -mavx)
-    if(USE_GPROF)
+    if (USE_GPROF)
         target_compile_options(benchmark PRIVATE -pg)
         target_link_options(benchmark PRIVATE -pg)
-    endif()
-    if(USE_SCOREP)
+    endif ()
+    if (USE_SCOREP)
         target_compile_definitions(benchmark PRIVATE -DSCOREP)
-    endif()
-endif()
+    endif ()
+endif ()
 
-if(BUILD_TESTS)
+if (BUILD_TESTS)
     include(FetchContent)
     FetchContent_Declare(
-          googletest
+            googletest
             URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
     )
     # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -84,16 +87,17 @@ if(BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
 
     FetchContent_Declare(
-        kassert
-        GIT_REPOSITORY https://github.com/kamping-site/kassert
-        GIT_TAG f0873f85ff046c6dee35a85148a51bfab73af44a
+            kassert
+            GIT_REPOSITORY https://github.com/kamping-site/kassert
+            GIT_TAG f0873f85ff046c6dee35a85148a51bfab73af44a
     )
     FetchContent_MakeAvailable(kassert)
 
-    add_executable(test test/main.cpp test/reproducibility_test.cpp test/chunked_array_test.cpp)
+    add_executable(test test/main.cpp test/reproducibility_test.cpp test/chunked_array_test.cpp
+            test/dual_tree_test.cpp)
     target_link_libraries(test GTest::gtest_main GTest::gmock MPI::MPI_CXX kassert binarytreesummation)
 
     include(GoogleTest)
     gtest_discover_tests(test)
 
-endif()
+endif ()
