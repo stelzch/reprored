@@ -23,6 +23,35 @@ vector<DualTreeTopology> instantiate_all_ranks(const vector<region> &regions) {
     return result;
 }
 
+
+/*
+ *   ├───────────────────────────────┐
+ *   ├───────────────┐               │
+ *   ├───────┐       ├───────┐       ├───────┐
+ *   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   │
+ *   0   1   2   3   4   5   6   7   8   9  10
+ */
+TEST(DualTreeTest, BinaryTreePrimitives) {
+    const vector<region> exampleA{{0, 11}};
+
+    DualTreeTopology topology(0, exampleA);
+    EXPECT_EQ(topology.max_y(0), 4);
+    EXPECT_EQ(topology.max_y(1), 0);
+    EXPECT_EQ(topology.max_y(2), 1);
+    EXPECT_EQ(topology.max_y(4), 2);
+    EXPECT_EQ(topology.max_y(8), 2);
+    EXPECT_EQ(topology.max_y(9), 0);
+    EXPECT_EQ(topology.max_y(10), 0);
+
+    EXPECT_EQ(topology.parent(9), 8);
+    EXPECT_EQ(topology.parent(6), 4);
+    EXPECT_EQ(topology.parent(2), 0);
+
+    EXPECT_EQ(topology.largest_child_index(4), 7);
+    EXPECT_EQ(topology.largest_child_index(8), 15);
+    EXPECT_EQ(topology.largest_child_index(9), 9);
+}
+
 /**
  *
  *           Reduction Tree
