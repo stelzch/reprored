@@ -64,18 +64,6 @@ uint64_t env2k() {
   return k;
 }
 
-ReductionContext new_reduction_context(int global_start_idx,
-                                       int local_summands) {
-  return new_reduction_context_comm(global_start_idx, local_summands,
-                                    (intptr_t)(default_communicator));
-}
-
-ReductionContext new_reduction_context_comm(int global_start_idx,
-                                            int local_summands,
-                                            intptr_t communicator) {
-  return new_reduction_context_comm_k(global_start_idx, local_summands,
-                                      communicator, global_k);
-}
 
 ReductionContext new_reduction_context_comm_k(int global_start_idx,
                                               int local_summands,
@@ -120,6 +108,20 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx,
   }
   }
 }
+
+ReductionContext new_reduction_context_comm(int global_start_idx,
+                                            int local_summands,
+                                            intptr_t communicator) {
+  return new_reduction_context_comm_k(global_start_idx, local_summands,
+                                      communicator, global_k);
+}
+
+ReductionContext new_reduction_context(int global_start_idx,
+                                       int local_summands) {
+  return new_reduction_context_comm(global_start_idx, local_summands,
+                                    (intptr_t)(default_communicator));
+}
+
 
 double *get_reduction_buffer(ReductionContext ctx) {
   auto *ptr = static_cast<Summation *>(ctx);
