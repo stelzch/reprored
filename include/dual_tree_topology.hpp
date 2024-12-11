@@ -25,22 +25,23 @@ public:
      * @param regions List
      */
     DualTreeTopology(int rank, const vector<region> &regions) :
-        cluster_size{regions.size()}, is_last_rank(rank + 1 >= cluster_size),
+        rank{rank}, cluster_size{regions.size()}, is_last_rank(rank + 1 >= cluster_size),
         largest_comm_child{rank == 0 ? cluster_size - 1 : largest_child_index(rank)},
         local_start_index(regions.at(rank).globalStartIndex), local_end_index(local_start_index + regions[rank].size),
-        global_size{compute_global_size(regions)}, global_comm_end_index(compute_global_comm_end_index(rank, regions)),
-        outgoing{compute_incoming_outgoing(regions).second}, incoming{compute_incoming_outgoing(regions).first} {
+        global_size{compute_global_size(regions)}, comm_end_index(compute_global_comm_end_index(rank, regions)),
+        outgoing{compute_outgoing(regions)} {
 
         assert(!regions.empty());
         for (auto i = 0U; i < regions.size() - 1; ++i) {
             assert(regions.at(i).globalStartIndex <= regions[i + 1].globalStartIndex);
         }
-        assert(local_end_index <= global_comm_end_index);
+        assert(local_end_index <= comm_end_index);
     };
 
 
+    /// Get coordinates of intermediate results that are computed on this rank and sent out accordingly.
+    /// Does not include results that are just passed along in the communication tree.
     const vector<TreeCoordinates> &get_outgoing() const { return outgoing; }
-    const vector<TreeCoordinates> &get_incoming() const { return incoming; }
 
     // Helper functions
     /**
@@ -112,8 +113,9 @@ public:
 
     bool is_subtree_comm_local(const uint64_t x, const int32_t y) const {
         if (y > 0) {
+            // TODO: adapt to truncated trees
             const auto largest_child_index = x + pow2(y) - 1;
-            return largest_child_index >= local_start_index && largest_child_index < global_comm_end_index;
+            return largest_child_index >= local_start_index && largest_child_index < comm_end_index;
         } else {
             assert(y >= 0);
             return x >= local_start_index && x < local_end_index;
@@ -143,13 +145,11 @@ private:
         collect_incoming_from_subtree(incoming, right_x, y - 1);
     }
 
-    std::pair<vector<TreeCoordinates>, vector<TreeCoordinates>>
-    compute_incoming_outgoing(const vector<region> &regions) {
-        vector<TreeCoordinates> incoming;
+    vector<TreeCoordinates> compute_outgoing(const vector<region> &regions) {
         vector<TreeCoordinates> outgoing;
 
-        if (local_start_index == local_end_index) {
-            return std::make_pair(incoming, outgoing);
+        if (local_start_index == local_end_index || rank == 0) {
+            return outgoing;
         }
 
         uint64_t x = local_start_index;
@@ -166,9 +166,6 @@ private:
                     // add to outbox
                     outgoing.emplace_back(x, y);
 
-                    // start search for inbox values
-                    collect_incoming_from_subtree(incoming, x, y);
-
                     // Stop search for new values
                     x = local_end_index;
                     break;
@@ -177,12 +174,12 @@ private:
         }
 
 
-        return std::make_pair(incoming, outgoing);
+        return outgoing;
     }
 
     uint64_t compute_global_comm_end_index(uint64_t rank, const vector<region> &regions) const {
-        if (is_last_rank || largest_comm_child == cluster_size - 1) {
-            return local_end_index + 1;
+        if (is_last_rank || largest_comm_child >= cluster_size - 1) {
+            return global_size;
         } else {
             return regions.at(largest_comm_child + 1).globalStartIndex;
         }
@@ -190,6 +187,7 @@ private:
 
 
     // Member variables
+    const int rank;
     const uint64_t cluster_size;
     const bool is_last_rank;
     /** Largest rank that sends their result to us, possibly over an intermediary. */
@@ -209,7 +207,7 @@ private:
      * to a rank lower than us. This is important because we do not have to wait on intermediate results with index
      * higher or equal to this field.
      */
-    const uint64_t global_comm_end_index;
+    const uint64_t comm_end_index;
 
     const vector<TreeCoordinates> outgoing;
     const vector<TreeCoordinates> incoming;
