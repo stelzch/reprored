@@ -111,7 +111,7 @@ TEST(DualTreeTest, ExampleA) {
  *      │       │                   │
  *   PE0   PE1           PE2              PE3
  *    │     │             │                │
- *    │ 1,0 │2,0          │ 8,1 10,0       │
+ *    │ 1,0 │2,0          │ 8,1            │
  *    │◄────┘             │◄───────────────┘
  *    │3,0 4,2 8,1 10,0   │
  *    │◄──────────────────┘
@@ -121,7 +121,7 @@ TEST(DualTreeTest, ExampleB) {
     const vector<region> exampleB{{0, 1}, {1, 2}, {3, 5}, {8, 3}};
 
     const auto t = instantiate_all_ranks(exampleB);
-    const vector<TC> t3_out{{8, 1}, {10, 0}};
+    const vector<TC> t3_out{{8, 2}};
     EXPECT_THAT(t[3].get_outgoing(), ElementsAreArray(t3_out));
 
     const vector<TC> t2_out{{3, 0}, {4, 2}}; // {8, 1}, {10, 0} indirectly
@@ -130,7 +130,6 @@ TEST(DualTreeTest, ExampleB) {
     const vector<TC> t1_out{{1, 0}, {2, 0}};
     EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
 
-    const vector<TC> t0_in{{1, 0}, {2, 0}, {3, 0}, {4, 2}, {8, 1}, {10, 0}};
     EXPECT_THAT(t[0].get_outgoing(), IsEmpty());
 }
 

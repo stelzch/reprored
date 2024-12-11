@@ -113,8 +113,7 @@ public:
 
     bool is_subtree_comm_local(const uint64_t x, const int32_t y) const {
         if (y > 0) {
-            // TODO: adapt to truncated trees
-            const auto largest_child_index = x + pow2(y) - 1;
+            const auto largest_child_index = std::min(x + pow2(y) - 1, global_size - 1);
             return largest_child_index >= local_start_index && largest_child_index < comm_end_index;
         } else {
             assert(y >= 0);
