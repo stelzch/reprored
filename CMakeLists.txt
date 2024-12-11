@@ -21,7 +21,7 @@ if (USE_SCOREP)
     set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
 endif ()
 
-list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp src/summation.cpp)
+list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp src/dual_tree_summation.cpp src/summation.cpp)
 
 
 add_definitions(-DAVX -DREPRODUCIBLE=${REPRODUCIBLE})
@@ -31,7 +31,9 @@ target_sources(binarytreesummation
         PRIVATE ${WRAPPER_SRC}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx)
+target_compile_options(binarytreesummation PRIVATE -Wall -O3 -ggdb -mavx -Wextra -pedantic -fsanitize=undefined)
+target_link_libraries(binarytreesummation PUBLIC -lubsan)
+
 
 if (USE_GPROF)
     target_compile_options(binarytreesummation PRIVATE -pg)

@@ -9,7 +9,8 @@ extern "C" {
 
 /* This header file exposes functions for binary tree summation for use in C programs */
 
-typedef void * ReductionContext;
+typedef void *ReductionContext;
+void attach_debugger(bool condition);
 
 
 /* TODO: remove void * type and replace with MPI_Comm. Requires MPI inclusion in every source file that includes

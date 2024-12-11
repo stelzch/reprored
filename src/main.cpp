@@ -18,20 +18,6 @@ using std::endl;
 using std::string;
 using std::vector;
 
-void __attribute__((optimize("O0"))) attach_debugger(bool condition) {
-  if (!condition)
-    return;
-  volatile bool attached = false;
-
-  // also write PID to a file
-  std::ofstream os("/tmp/mpi_debug.pid");
-  os << getpid() << endl;
-  os.close();
-
-  cout << "Waiting for debugger to be attached, PID: " << getpid() << endl;
-  while (!attached)
-    sleep(1);
-}
 
 int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);

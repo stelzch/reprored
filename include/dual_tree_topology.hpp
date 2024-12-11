@@ -1,5 +1,8 @@
 #pragma once
 #include <cassert>
+#include <cmath>
+#include <format>
+#include <string>
 #include <util.hpp>
 
 #include <bit>
@@ -25,11 +28,16 @@ public:
      * @param regions List
      */
     DualTreeTopology(int rank, const vector<region> &regions) :
-        rank{rank}, cluster_size{regions.size()}, is_last_rank(rank + 1 >= cluster_size),
+        rank{rank},
+        cluster_size{regions.size()},
+        is_last_rank(rank + 1 >= cluster_size),
         largest_comm_child{rank == 0 ? cluster_size - 1 : largest_child_index(rank)},
-        local_start_index(regions.at(rank).globalStartIndex), local_end_index(local_start_index + regions[rank].size),
-        global_size{compute_global_size(regions)}, comm_end_index(compute_global_comm_end_index(rank, regions)),
-        outgoing{compute_outgoing(regions)}, comm_children(compute_comm_children()) {
+        local_start_index(regions.at(rank).globalStartIndex),
+        local_end_index(local_start_index + regions[rank].size),
+        global_size{compute_global_size(regions)},
+        comm_end_index(compute_global_comm_end_index(rank, regions)),
+        outgoing{compute_outgoing(regions)},
+        comm_children(compute_comm_children()) {
 
         assert(!regions.empty());
         for (auto i = 0U; i < regions.size() - 1; ++i) {
@@ -104,13 +112,14 @@ public:
 
     bool is_subtree_local(const uint64_t x, const int32_t y) const {
         if (y > 0) {
-            const auto largest_child_index = x + pow2(y) - 1;
+            const auto largest_child_index = std::min(x + pow2(y) - 1, global_size - 1);
             return largest_child_index >= local_start_index && largest_child_index < local_end_index;
         } else {
             assert(y >= 0);
             return x >= local_start_index && x < local_end_index;
         }
     }
+    bool is_subtree_local(const TreeCoordinates &coords) const { return is_subtree_local(coords.first, coords.second); }
 
     bool is_subtree_comm_local(const uint64_t x, const int32_t y) const {
         if (y > 0) {
@@ -121,6 +130,11 @@ public:
             return x >= local_start_index && x < local_end_index;
         }
     }
+
+    uint64_t get_local_size() const { return local_end_index - local_start_index; }
+    uint64_t get_local_start_index() const { return local_start_index; }
+    uint64_t get_local_end_index() const { return local_end_index; }
+    uint64_t get_global_size() const { return global_size; }
 
 private:
     // Constructor-related functions
@@ -148,7 +162,7 @@ private:
     vector<TreeCoordinates> compute_outgoing(const vector<region> &regions) {
         vector<TreeCoordinates> outgoing;
 
-        if (local_start_index == local_end_index || rank == 0) {
+        if (local_start_index == local_end_index) {
             return outgoing;
         }
 
@@ -206,12 +220,16 @@ private:
     /** Global index of the first element this PE holds locally. */
     const uint64_t local_start_index;
 
+
+private:
     /** Global index of first element that is no longer located on this rank. */
     const uint64_t local_end_index;
 
     /** Total number of elements */
     const uint64_t global_size;
 
+
+private:
     /** The global index of the first element that no longer located on a rank that sends their intermediate
      * results to us. I.e. the global start index of the first PE with a higher rank than ours who sends their results
      * to a rank lower than us. This is important because we do not have to wait on intermediate results with index

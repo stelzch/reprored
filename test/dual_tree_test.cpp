@@ -57,6 +57,10 @@ TEST(DualTreeTest, BinaryTreePrimitives) {
     EXPECT_EQ(topology.subtree_size(4), 4);
     EXPECT_EQ(topology.subtree_size(6), 2);
     EXPECT_EQ(topology.subtree_size(8), 3);
+
+    EXPECT_TRUE(topology.is_subtree_local(8, 3));
+
+    EXPECT_THAT(topology.get_comm_children(), IsEmpty());
 }
 
 /**
@@ -105,7 +109,7 @@ TEST(DualTreeTest, ExampleA) {
     EXPECT_TRUE(t[1].is_subtree_local(4, 1));
     EXPECT_THAT(t[1].get_locally_computed(), ElementsAre(TC(3, 0), TC(4, 1), TC(6, 0)));
 
-    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
+    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
 }
 
 /**
@@ -145,7 +149,7 @@ TEST(DualTreeTest, ExampleB) {
     const vector<TC> t1_out{{1, 0}, {2, 0}};
     EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
 
-    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
+    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
 }
 
 
@@ -195,7 +199,7 @@ TEST(DualTreeTest, ExampleC) {
     EXPECT_THAT(t[3].get_locally_computed(), ElementsAreArray(t3_out));
     EXPECT_THAT(t[2].get_locally_computed(), ElementsAreArray(t2_out));
     EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
-    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
+    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
 }
 
 
@@ -277,6 +281,15 @@ TEST(DualTree, Fuzzer) {
             }
             ASSERT_GE(x, array_length);
         }
-
     }
 }
+/*
+ *  ├───────────────────────────────┐
+ *  ├───────────────┐               ├───────────────┐
+ *  ├───────┐       ├───────┐       ├───────┐       ├───────┐
+ *  ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐
+ *  │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │
+ *  0   1   2   3 │ 4   5   6   7 | 8   9  10  11 |12  13  14  15
+ *
+ *
+ */
