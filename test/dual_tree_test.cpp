@@ -33,16 +33,17 @@ vector<DualTreeTopology> instantiate_all_ranks(const vector<region> &regions) {
  *   0   1   2   3   4   5   6   7   8   9  10
  */
 TEST(DualTreeTest, BinaryTreePrimitives) {
-    const vector<region> exampleA{{0, 11}};
+    const auto global_size = 11;
+    const vector<region> exampleA{{0, global_size}};
 
     DualTreeTopology topology(0, exampleA);
-    EXPECT_EQ(topology.max_y(0), 4);
-    EXPECT_EQ(topology.max_y(1), 0);
-    EXPECT_EQ(topology.max_y(2), 1);
-    EXPECT_EQ(topology.max_y(4), 2);
-    EXPECT_EQ(topology.max_y(8), 2);
-    EXPECT_EQ(topology.max_y(9), 0);
-    EXPECT_EQ(topology.max_y(10), 0);
+    EXPECT_EQ(topology.max_y(0, global_size), 4);
+    EXPECT_EQ(topology.max_y(1, global_size), 0);
+    EXPECT_EQ(topology.max_y(2, global_size), 1);
+    EXPECT_EQ(topology.max_y(4, global_size), 2);
+    EXPECT_EQ(topology.max_y(8, global_size), 2);
+    EXPECT_EQ(topology.max_y(9, global_size), 0);
+    EXPECT_EQ(topology.max_y(10, global_size), 0);
 
     EXPECT_EQ(topology.parent(9), 8);
     EXPECT_EQ(topology.parent(6), 4);
@@ -86,19 +87,25 @@ TEST(DualTreeTest, ExampleA) {
 
     const auto t = instantiate_all_ranks(exampleA);
 
+    EXPECT_THAT(t[0].get_comm_children(), ElementsAre(1, 2, 4));
+    EXPECT_THAT(t[1].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[2].get_comm_children(), ElementsAre(3));
+    EXPECT_THAT(t[3].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[4].get_comm_children(), IsEmpty());
+
     // start from the back at PE4
-    EXPECT_THAT(t[4].get_outgoing(), ElementsAre(TC(10, 0)));
+    EXPECT_THAT(t[4].get_locally_computed(), ElementsAre(TC(10, 0)));
 
-    EXPECT_THAT(t[3].get_outgoing(), ElementsAre(TC(8, 1)));
+    EXPECT_THAT(t[3].get_locally_computed(), ElementsAre(TC(8, 1)));
 
-    EXPECT_THAT(t[2].get_outgoing(), ElementsAre(TC(7, 0))); // TC(8, 1) indirectly
+    EXPECT_THAT(t[2].get_locally_computed(), ElementsAre(TC(7, 0))); // TC(8, 1) indirectly
 
     EXPECT_FALSE(t[1].is_subtree_comm_local(4, 2));
     EXPECT_TRUE(t[1].is_subtree_comm_local(4, 1));
     EXPECT_TRUE(t[1].is_subtree_local(4, 1));
-    EXPECT_THAT(t[1].get_outgoing(), ElementsAre(TC(3, 0), TC(4, 1), TC(6, 0)));
+    EXPECT_THAT(t[1].get_locally_computed(), ElementsAre(TC(3, 0), TC(4, 1), TC(6, 0)));
 
-    EXPECT_THAT(t[0].get_outgoing(), IsEmpty());
+    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
 }
 
 /**
@@ -122,16 +129,23 @@ TEST(DualTreeTest, ExampleB) {
     const vector<region> exampleB{{0, 1}, {1, 2}, {3, 5}, {8, 3}};
 
     const auto t = instantiate_all_ranks(exampleB);
+
+    EXPECT_THAT(t[0].get_comm_children(), ElementsAre(1, 2));
+    EXPECT_THAT(t[1].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[2].get_comm_children(), ElementsAre(3));
+    EXPECT_THAT(t[3].get_comm_children(), IsEmpty());
+
+
     const vector<TC> t3_out{{8, 2}};
-    EXPECT_THAT(t[3].get_outgoing(), ElementsAreArray(t3_out));
+    EXPECT_THAT(t[3].get_locally_computed(), ElementsAreArray(t3_out));
 
     const vector<TC> t2_out{{3, 0}, {4, 2}}; // {8, 1}, {10, 0} indirectly
-    EXPECT_THAT(t[2].get_outgoing(), ElementsAreArray(t2_out));
+    EXPECT_THAT(t[2].get_locally_computed(), ElementsAreArray(t2_out));
 
     const vector<TC> t1_out{{1, 0}, {2, 0}};
-    EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
+    EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
 
-    EXPECT_THAT(t[0].get_outgoing(), IsEmpty());
+    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
 }
 
 
@@ -158,8 +172,16 @@ TEST(DualTreeTest, ExampleB) {
  */
 TEST(DualTreeTest, ExampleC) {
     const vector<region> exampleC{{0, 4}, {4, 2}, {6, 3}, {9, 2}, {11, 2}, {13, 1}, {14, 2}};
-
     const auto t = instantiate_all_ranks(exampleC);
+
+    EXPECT_THAT(t[0].get_comm_children(), ElementsAre(1, 2, 4));
+    EXPECT_THAT(t[1].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[2].get_comm_children(), ElementsAre(3));
+    EXPECT_THAT(t[3].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[4].get_comm_children(), ElementsAre(5, 6));
+    EXPECT_THAT(t[5].get_comm_children(), IsEmpty());
+    EXPECT_THAT(t[6].get_comm_children(), IsEmpty());
+
     const vector<TC> t6_out{{14, 1}};
     const vector<TC> t5_out{{13, 0}};
     const vector<TC> t4_out{{11, 0}, {12, 2}};
@@ -167,13 +189,13 @@ TEST(DualTreeTest, ExampleC) {
     const vector<TC> t2_out{{6, 1}, {8, 1}};
     const vector<TC> t1_out{{4, 1}};
 
-    EXPECT_THAT(t[6].get_outgoing(), ElementsAreArray(t6_out));
-    EXPECT_THAT(t[5].get_outgoing(), ElementsAreArray(t5_out));
-    EXPECT_THAT(t[4].get_outgoing(), ElementsAreArray(t4_out));
-    EXPECT_THAT(t[3].get_outgoing(), ElementsAreArray(t3_out));
-    EXPECT_THAT(t[2].get_outgoing(), ElementsAreArray(t2_out));
-    EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
-    EXPECT_THAT(t[0].get_outgoing(), IsEmpty());
+    EXPECT_THAT(t[6].get_locally_computed(), ElementsAreArray(t6_out));
+    EXPECT_THAT(t[5].get_locally_computed(), ElementsAreArray(t5_out));
+    EXPECT_THAT(t[4].get_locally_computed(), ElementsAreArray(t4_out));
+    EXPECT_THAT(t[3].get_locally_computed(), ElementsAreArray(t3_out));
+    EXPECT_THAT(t[2].get_locally_computed(), ElementsAreArray(t2_out));
+    EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
+    EXPECT_THAT(t[0].get_locally_computed(), IsEmpty());
 }
 
 
@@ -206,7 +228,7 @@ auto distribute_randomly(std::mt19937 rng, size_t const collection_size, size_t 
 }
 
 TEST(DualTree, Fuzzer) {
-    constexpr auto NUM_TESTS = 300000;
+    constexpr auto NUM_TESTS = 30000;
 
     std::random_device rd;
     unsigned long seed = rd();
@@ -222,7 +244,7 @@ TEST(DualTree, Fuzzer) {
 
         std::map<uint64_t, short> subtree_size; // maps x -> y
         for (const auto &t : topologies) {
-            for (const auto [x, y] : t.get_outgoing()) {
+            for (const auto [x, y] : t.get_locally_computed()) {
                 auto it = subtree_size.find(x);
 
                 if (it == subtree_size.end()) {

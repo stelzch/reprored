@@ -29,7 +29,7 @@ public:
         largest_comm_child{rank == 0 ? cluster_size - 1 : largest_child_index(rank)},
         local_start_index(regions.at(rank).globalStartIndex), local_end_index(local_start_index + regions[rank].size),
         global_size{compute_global_size(regions)}, comm_end_index(compute_global_comm_end_index(rank, regions)),
-        outgoing{compute_outgoing(regions)} {
+        outgoing{compute_outgoing(regions)}, comm_children(compute_comm_children()) {
 
         assert(!regions.empty());
         for (auto i = 0U; i < regions.size() - 1; ++i) {
@@ -41,7 +41,9 @@ public:
 
     /// Get coordinates of intermediate results that are computed on this rank and sent out accordingly.
     /// Does not include results that are just passed along in the communication tree.
-    const vector<TreeCoordinates> &get_outgoing() const { return outgoing; }
+    const vector<TreeCoordinates> &get_locally_computed() const { return outgoing; }
+
+    const vector<int> &get_comm_children() const { return comm_children; }
 
     // Helper functions
     /**
@@ -79,8 +81,7 @@ public:
      * Get the maximum level of the subtree rooted at given index.
      * Does perform boundary checks at the end of the tree in case the global number of elements is not a power of 2.
      */
-    uint16_t max_y(const uint32_t index) const {
-
+    static inline uint16_t max_y(const uint32_t index, const uint64_t global_size) {
         if (index != 0 && largest_child_index(index) < global_size) {
             // Normal case, i.e. non-zero index without truncated subtree
             return std::countr_zero(index);
@@ -154,7 +155,7 @@ private:
         uint64_t x = local_start_index;
 
         while (x < local_end_index) {
-            for (int32_t y = max_y(x); y >= 0; --y) {
+            for (int32_t y = max_y(x, global_size); y >= 0; --y) {
                 if (is_subtree_local(x, y)) {
                     outgoing.emplace_back(x, y);
                     x += pow2(y);
@@ -184,6 +185,16 @@ private:
         }
     }
 
+    std::vector<int> compute_comm_children() const {
+        std::vector<int> result;
+
+        for (int32_t y = 0; y < max_y(rank, cluster_size); ++y) {
+            result.push_back(rank + pow2(y));
+        }
+
+        return result;
+    }
+
 
     // Member variables
     const int rank;
@@ -209,5 +220,5 @@ private:
     const uint64_t comm_end_index;
 
     const vector<TreeCoordinates> outgoing;
-    const vector<TreeCoordinates> incoming;
+    const vector<int> comm_children;
 };
