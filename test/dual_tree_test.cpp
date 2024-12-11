@@ -3,6 +3,7 @@
 #include <k_chunked_array.hpp>
 #include <util.hpp>
 
+#include <random>
 #include "dual_tree_topology.hpp"
 
 using std::vector;
@@ -156,15 +157,15 @@ TEST(DualTreeTest, ExampleB) {
  *
  */
 TEST(DualTreeTest, ExampleC) {
-    const vector<region> exampleC{{0,4}, {4,2}, {6,3}, {9,2}, {11, 2}, {13,1}, {14,2}};
+    const vector<region> exampleC{{0, 4}, {4, 2}, {6, 3}, {9, 2}, {11, 2}, {13, 1}, {14, 2}};
 
     const auto t = instantiate_all_ranks(exampleC);
-    const vector<TC> t6_out {{14,1}};
-    const vector<TC> t5_out {{13,0}};
-    const vector<TC> t4_out {{11,0}, {12,2}};
-    const vector<TC> t3_out {{9,0}, {10,0}};
-    const vector<TC> t2_out {{6,1}, {8,1}};
-    const vector<TC> t1_out {{4,1}};
+    const vector<TC> t6_out{{14, 1}};
+    const vector<TC> t5_out{{13, 0}};
+    const vector<TC> t4_out{{11, 0}, {12, 2}};
+    const vector<TC> t3_out{{9, 0}, {10, 0}};
+    const vector<TC> t2_out{{6, 1}, {8, 1}};
+    const vector<TC> t1_out{{4, 1}};
 
     EXPECT_THAT(t[6].get_outgoing(), ElementsAreArray(t6_out));
     EXPECT_THAT(t[5].get_outgoing(), ElementsAreArray(t5_out));
@@ -173,4 +174,87 @@ TEST(DualTreeTest, ExampleC) {
     EXPECT_THAT(t[2].get_outgoing(), ElementsAreArray(t2_out));
     EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
     EXPECT_THAT(t[0].get_outgoing(), IsEmpty());
+}
+
+
+auto distribute_randomly(std::mt19937 rng, size_t const collection_size, size_t const comm_size) {
+    // Compare to
+    // https://github.com/kamping-site/kamping/blob/8e1f3955345ad669c90658181edf5b6c2c77ea48/tests/plugins/reproducible_reduce.cpp#L67-L104
+    std::uniform_int_distribution<> dist(0, collection_size);
+
+    // See https://stackoverflow.com/a/48205426 for details
+    std::vector<int> points(comm_size, 0UL);
+    points.push_back(collection_size);
+    std::generate(points.begin() + 1, points.end() - 1, [&dist, &rng]() { return dist(rng); });
+    std::sort(points.begin(), points.end());
+
+    std::vector<int> region_lengths(comm_size);
+    for (size_t i = 0; i < region_lengths.size(); ++i) {
+        region_lengths[i] = points[i + 1] - points[i];
+    }
+
+    vector<region> regions;
+    regions.reserve(comm_size);
+
+    auto index = 0UL;
+    for (const auto length: region_lengths) {
+        regions.emplace_back(index, length);
+        index += length;
+    }
+
+    return regions;
+}
+
+TEST(DualTree, Fuzzer) {
+    constexpr auto NUM_TESTS = 300000;
+
+    std::random_device rd;
+    unsigned long seed = rd();
+
+    std::uniform_int_distribution<size_t> array_length_distribution(0, 50);
+    std::uniform_int_distribution<size_t> rank_distribution(2, 20);
+    std::mt19937 rng(seed);
+
+    for (auto i = 0U; i < NUM_TESTS; i++) {
+        auto array_length = array_length_distribution(rng);
+        const auto regions = distribute_randomly(rng, array_length, rank_distribution(rng));
+        const auto topologies = instantiate_all_ranks(regions);
+
+        std::map<uint64_t, short> subtree_size; // maps x -> y
+        for (const auto &t : topologies) {
+            for (const auto [x, y] : t.get_outgoing()) {
+                auto it = subtree_size.find(x);
+
+                if (it == subtree_size.end()) {
+                    subtree_size[x] = y;
+                } else {
+                    const short existing = it->second;
+                    const short new_value = y;
+                    it->second = std::max(existing, new_value);
+                }
+            }
+        }
+
+        {
+            // No need to perform tests on the first rank, since it does not send the values anywhere.
+            auto x = regions[1].globalStartIndex;
+
+            // Try to see if the whole array is covered through the reduction by iterating over the subtrees
+            // Very incomplete check that does not guarantee correctness.
+            for (const auto [subtree_x, subtree_y] : subtree_size) {
+                if (x > subtree_x) {
+                    continue;
+                }
+                ASSERT_EQ(x, subtree_x);
+
+                ASSERT_GE(subtree_y, 0);
+                const auto step = DualTreeTopology::pow2(subtree_y);
+                ASSERT_GT(step, 0);
+
+                x += step;
+            }
+            ASSERT_GE(x, array_length);
+        }
+
+    }
 }
