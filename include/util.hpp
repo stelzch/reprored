@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
@@ -15,8 +16,10 @@ struct region {
     uint64_t globalStartIndex;
     uint64_t size;
 
-    region() : globalStartIndex(0), size(0) {}
-    region(uint64_t globalStartIndex, uint64_t size) : globalStartIndex(globalStartIndex), size(size) {}
+    region() :
+        globalStartIndex(0), size(0) {}
+    region(uint64_t globalStartIndex, uint64_t size) :
+        globalStartIndex(globalStartIndex), size(size) {}
 };
 
 template<typename T>
@@ -115,3 +118,25 @@ public:
 private:
     std::chrono::time_point<std::chrono::steady_clock> _start;
 };
+template<typename F>
+void with_comm_size_n(MPI_Comm &comm, size_t comm_size, F f) {
+    int full_comm_size, full_comm_rank;
+    MPI_Comm_size(comm, &full_comm_size);
+    MPI_Comm_rank(comm, &full_comm_rank);
+    assert(full_comm_size >= comm_size);
+
+    int rank_active = full_comm_rank < comm_size;
+    MPI_Comm new_comm;
+    MPI_Comm_split(comm, rank_active, 0, &new_comm);
+
+    int new_rank;
+    int new_comm_size;
+    MPI_Comm_rank(new_comm, &new_rank);
+    MPI_Comm_size(new_comm, &new_comm_size);
+
+    if (rank_active) {
+        f(new_comm, new_rank, new_comm_size);
+    }
+
+    MPI_Comm_free(&new_comm);
+}

@@ -1,3 +1,4 @@
+#include <dual_tree_summation.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <k_chunked_array.hpp>
@@ -203,93 +204,93 @@ TEST(DualTreeTest, ExampleC) {
 }
 
 
-auto distribute_randomly(std::mt19937 rng, size_t const collection_size, size_t const comm_size) {
-    // Compare to
-    // https://github.com/kamping-site/kamping/blob/8e1f3955345ad669c90658181edf5b6c2c77ea48/tests/plugins/reproducible_reduce.cpp#L67-L104
-    std::uniform_int_distribution<> dist(0, collection_size);
-
-    // See https://stackoverflow.com/a/48205426 for details
-    std::vector<int> points(comm_size, 0UL);
-    points.push_back(collection_size);
-    std::generate(points.begin() + 1, points.end() - 1, [&dist, &rng]() { return dist(rng); });
-    std::sort(points.begin(), points.end());
-
-    std::vector<int> region_lengths(comm_size);
-    for (size_t i = 0; i < region_lengths.size(); ++i) {
-        region_lengths[i] = points[i + 1] - points[i];
-    }
-
-    vector<region> regions;
-    regions.reserve(comm_size);
-
-    auto index = 0UL;
-    for (const auto length: region_lengths) {
-        regions.emplace_back(index, length);
-        index += length;
-    }
-
-    return regions;
-}
-
 TEST(DualTree, Fuzzer) {
-    constexpr auto NUM_TESTS = 30000;
+    int full_comm_size;
+    int full_comm_rank;
+    auto comm = MPI_COMM_WORLD;
+    MPI_Comm_size(comm, &full_comm_size);
+    MPI_Comm_rank(comm, &full_comm_rank);
 
+    MPI_Barrier(comm);
+
+    ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
+
+    constexpr auto NUM_ARRAYS = 20000; // 15;
+    constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
+
+    // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
-    unsigned long seed = rd();
+    unsigned long seed;
 
-    std::uniform_int_distribution<size_t> array_length_distribution(0, 50);
-    std::uniform_int_distribution<size_t> rank_distribution(2, 20);
-    std::mt19937 rng(seed);
+    if (full_comm_rank == 0) {
+        seed = rd();
+    }
+    MPI_Bcast(&seed, 1, MPI_UNSIGNED_LONG, 0, comm);
 
-    for (auto i = 0U; i < NUM_TESTS; i++) {
-        auto array_length = array_length_distribution(rng);
-        const auto regions = distribute_randomly(rng, array_length, rank_distribution(rng));
-        const auto topologies = instantiate_all_ranks(regions);
+    std::uniform_int_distribution<size_t> array_length_distribution(1, 20);
+    std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
+    std::mt19937 rng(seed); // RNG for distribution & rank number
+    std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
 
-        std::map<uint64_t, short> subtree_size; // maps x -> y
-        for (const auto &t : topologies) {
-            for (const auto [x, y] : t.get_locally_computed()) {
-                auto it = subtree_size.find(x);
+    auto checks = 0UL;
 
-                if (it == subtree_size.end()) {
-                    subtree_size[x] = y;
-                } else {
-                    const short existing = it->second;
-                    const short new_value = y;
-                    it->second = std::max(existing, new_value);
-                }
-            }
+    for (auto i = 0U; i < NUM_ARRAYS; ++i) {
+        std::vector<double> data_array;
+        size_t const data_array_size = array_length_distribution(rng);
+        if (full_comm_rank == 0) {
+            data_array = generate_test_vector(data_array_size, rng_root());
         }
 
-        {
-            // No need to perform tests on the first rank, since it does not send the values anywhere.
-            auto x = regions[1].globalStartIndex;
+        double reference_result = 0;
 
-            // Try to see if the whole array is covered through the reduction by iterating over the subtrees
-            // Very incomplete check that does not guarantee correctness.
-            for (const auto [subtree_x, subtree_y] : subtree_size) {
-                if (x > subtree_x) {
-                    continue;
+        // Calculate reference result
+        with_comm_size_n(comm, 1, [&reference_result, &data_array, &comm](auto comm_, auto rank, auto _) {
+            const auto distribution = distribute_evenly(data_array.size(), 1);
+            DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
+            memcpy(dts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
+
+            reference_result = dts.accumulate();
+
+            // Sanity check
+            ASSERT_NEAR(reference_result, std::accumulate(data_array.begin(), data_array.end(), 0.0), 1e-9);
+        });
+
+        MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
+
+        for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
+                auto const ranks        = rank_distribution(rng);
+                auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
+
+                if (full_comm_rank == 0) {
+                    printf("n=%zu, p=%zu, distribution=", data_array_size, ranks);
+                    for (auto i = 0; i < ranks; ++i) {
+                        printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
+                    }
+                    printf("\n");
                 }
-                ASSERT_EQ(x, subtree_x);
 
-                ASSERT_GE(subtree_y, 0);
-                const auto step = DualTreeTopology::pow2(subtree_y);
-                ASSERT_GT(step, 0);
+                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &comm](auto comm_, auto rank, auto size) {
+                    MPI_Barrier(comm_);
+                    int comm_size;
+                    MPI_Comm_size(comm_, &comm_size);
+                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                    ASSERT_EQ(distribution.displs.size(), comm_size);
+                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                x += step;
+                    DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
+
+                    std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
+                    memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+
+                    double computed_result = dts.accumulate();
+
+                    EXPECT_EQ(computed_result, reference_result);
+                    ++checks;
+                });
             }
-            ASSERT_GE(x, array_length);
-        }
+    }
+
+    if (full_comm_rank == 0) {
+        printf("Performed %zu checks\n", checks);
     }
 }
-/*
- *  ├───────────────────────────────┐
- *  ├───────────────┐               ├───────────────┐
- *  ├───────┐       ├───────┐       ├───────┐       ├───────┐
- *  ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐
- *  │   │   │   │   │   │   │   │   │   │   │   │   │   │   │   │
- *  0   1   2   3 │ 4   5   6   7 | 8   9  10  11 |12  13  14  15
- *
- *
- */
