@@ -30,7 +30,7 @@ public:
     DualTreeTopology(int rank, const vector<region> &regions) :
         rank{rank},
         cluster_size{regions.size()},
-        is_last_rank(rank + 1 >= cluster_size),
+        is_last_rank(compute_is_last_rank(rank, regions)),
         largest_comm_child{rank == 0 ? cluster_size - 1 : largest_child_index(rank)},
         local_start_index(regions.at(rank).globalStartIndex),
         local_end_index(local_start_index + regions[rank].size),
@@ -194,9 +194,15 @@ private:
     uint64_t compute_global_comm_end_index(uint64_t rank, const vector<region> &regions) const {
         if (is_last_rank || largest_comm_child >= cluster_size - 1) {
             return global_size;
-        } else {
-            return regions.at(largest_comm_child + 1).globalStartIndex;
         }
+
+        const auto successor_region =
+                std::find_if(regions.begin() + largest_comm_child + 1, regions.end(), region_not_empty);
+        if (successor_region == regions.end()) {
+            return global_size;
+        }
+
+        return successor_region->globalStartIndex;
     }
 
     std::vector<int> compute_comm_children() const {
@@ -207,6 +213,16 @@ private:
         }
 
         return result;
+    }
+
+    bool compute_is_last_rank(const int rank, const vector<region> &regions) {
+        if (rank == cluster_size - 1) {
+            return true;
+        }
+
+        const auto next_pe_with_elements = std::find_if(regions.begin() + rank + 1, regions.end(), region_not_empty);
+
+        return next_pe_with_elements == regions.end();
     }
 
 

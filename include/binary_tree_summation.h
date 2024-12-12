@@ -11,6 +11,7 @@ extern "C" {
 
 typedef void *ReductionContext;
 void attach_debugger(bool condition);
+void attach_debugger_env();
 
 
 /* TODO: remove void * type and replace with MPI_Comm. Requires MPI inclusion in every source file that includes

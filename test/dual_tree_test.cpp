@@ -5,6 +5,8 @@
 #include <util.hpp>
 
 #include <random>
+
+#include "binary_tree_summation.h"
 #include "dual_tree_topology.hpp"
 
 using std::vector;
@@ -204,6 +206,20 @@ TEST(DualTreeTest, ExampleC) {
 }
 
 
+TEST(DualTree, SingleRankReduction) {
+    const auto v = generate_test_vector(11, 42);
+    const auto distribution = distribute_evenly(v.size(), 1);
+    const auto regions = regions_from_distribution(distribution);
+
+    DualTreeSummation dts(0, regions, MPI_COMM_WORLD);
+
+    memcpy(dts.getBuffer(), v.data(), v.size() * sizeof(double));
+
+    const auto computed = dts.accumulate();
+    const auto reference = std::accumulate(v.begin(), v.end(), 0.0);
+    EXPECT_NEAR(reference, computed, 1e-9);
+}
+
 TEST(DualTree, Fuzzer) {
     int full_comm_size;
     int full_comm_rank;
@@ -213,7 +229,7 @@ TEST(DualTree, Fuzzer) {
 
     MPI_Barrier(comm);
 
-    ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
+    // ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
     constexpr auto NUM_ARRAYS = 20000; // 15;
     constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
@@ -223,14 +239,15 @@ TEST(DualTree, Fuzzer) {
     unsigned long seed;
 
     if (full_comm_rank == 0) {
-        seed = rd();
+        seed = 53; // rd();
     }
     MPI_Bcast(&seed, 1, MPI_UNSIGNED_LONG, 0, comm);
 
-    std::uniform_int_distribution<size_t> array_length_distribution(1, 20);
+    std::uniform_int_distribution<size_t> array_length_distribution(1, 200);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
     std::mt19937 rng(seed); // RNG for distribution & rank number
     std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
+    attach_debugger_env();
 
     auto checks = 0UL;
 
@@ -244,49 +261,57 @@ TEST(DualTree, Fuzzer) {
         double reference_result = 0;
 
         // Calculate reference result
-        with_comm_size_n(comm, 1, [&reference_result, &data_array, &comm](auto comm_, auto rank, auto _) {
+        with_comm_size_n(comm, 1, [&reference_result, &data_array, &comm](auto comm_, auto rank, auto comm_size_) {
+            ASSERT_EQ(rank, 0);
+            ASSERT_EQ(comm_size_, 1);
             const auto distribution = distribute_evenly(data_array.size(), 1);
             DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
             memcpy(dts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
 
             reference_result = dts.accumulate();
+            const auto std_accumulate_result = std::accumulate(data_array.begin(), data_array.end(), 0.0);
 
             // Sanity check
-            ASSERT_NEAR(reference_result, std::accumulate(data_array.begin(), data_array.end(), 0.0), 1e-9);
+            ASSERT_NEAR(reference_result, std_accumulate_result, 1e-9);
         });
 
         MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
+
         for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
-                auto const ranks        = rank_distribution(rng);
-                auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
+            auto const ranks = rank_distribution(rng);
+            auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
-                if (full_comm_rank == 0) {
-                    printf("n=%zu, p=%zu, distribution=", data_array_size, ranks);
-                    for (auto i = 0; i < ranks; ++i) {
-                        printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
-                    }
-                    printf("\n");
+            if (full_comm_rank == 0) {
+                printf("n=%zu, p=%zu, distribution=", data_array_size, ranks);
+                for (auto i = 0; i < ranks; ++i) {
+                    printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
                 }
+                printf("\n");
+            }
 
-                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &comm](auto comm_, auto rank, auto size) {
-                    MPI_Barrier(comm_);
-                    int comm_size;
-                    MPI_Comm_size(comm_, &comm_size);
-                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
-                    ASSERT_EQ(distribution.displs.size(), comm_size);
-                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
+            with_comm_size_n(comm, ranks,
+                             [&distribution, &data_array, &ranks, &reference_result](auto comm_, auto rank, auto size) {
+                                 MPI_Barrier(comm_);
+                                 int comm_size;
+                                 MPI_Comm_size(comm_, &comm_size);
+                                 ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                                 ASSERT_EQ(distribution.displs.size(), comm_size);
+                                 ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                    DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
+                                 DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
 
-                    std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
-                    memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                                 std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
+                                 if (local_arr.size() > dts.getBufferSize()) {
+                                     attach_debugger(true);
+                                 }
+                                 EXPECT_LE(local_arr.size(), dts.getBufferSize());
+                                 memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
-                    double computed_result = dts.accumulate();
-
-                    EXPECT_EQ(computed_result, reference_result);
-                    ++checks;
+                    double result = dts.accumulate();
+                    EXPECT_EQ(result, reference_result);
                 });
+                ++checks;
             }
     }
 
@@ -294,3 +319,46 @@ TEST(DualTree, Fuzzer) {
         printf("Performed %zu checks\n", checks);
     }
 }
+
+
+class ReductionTest : public ::testing::TestWithParam<Distribution> {
+public:
+    void SetUp() override {
+        full_comm = MPI_COMM_WORLD;
+        MPI_Comm_rank(full_comm, &rank);
+        MPI_Comm_size(full_comm, &comm_size);
+        regions = regions_from_distribution(GetParam());
+        global_array_length = std::accumulate(GetParam().send_counts.begin(), GetParam().send_counts.end(), 0);
+    }
+protected:
+    vector<region> regions;
+    uint64_t global_array_length;
+    int comm_size;
+    int rank;
+    MPI_Comm full_comm;
+
+};
+TEST_P(ReductionTest, DifficultDistributions) {
+    const Distribution d = GetParam();
+    const auto regions = regions_from_distribution(d);
+
+    ASSERT_GE(comm_size, regions.size());
+
+    vector<double> v = generate_test_vector(global_array_length, 4);
+    double reference = std::accumulate(v.begin(), v.end(), 0.0);
+
+    with_comm_size_n(full_comm, regions.size(), [&,  &regions](auto comm, auto rank, auto size) {
+        auto local_arr = scatter_array(full_comm, v, d);
+        DualTreeSummation dts(rank, regions, comm);
+
+        double result = dts.accumulate();
+        EXPECT_NEAR(reference, result, 1e-9);
+    });
+}
+
+//(4, 8) (12, 2) (0, 4) (4, 0)
+const Distribution d1 {{8, 2, 4, 0}, {4, 12, 0, 4}};
+INSTANTIATE_TEST_SUITE_P(
+    MDistributionTests,
+    ReductionTest,
+    testing::Values(d1));

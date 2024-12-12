@@ -1,6 +1,7 @@
 #include <allreduce_summation.hpp>
 #include <binary_tree_summation.h>
 #include <binary_tree_summation.hpp>
+#include <cstring>
 #include <kgather_summation.hpp>
 #include <mpi.h>
 #include <reproblas_summation.hpp>
@@ -168,4 +169,24 @@ void __attribute__((optimize("O0"))) attach_debugger(bool condition) {
     std::cout << "Waiting for debugger to be attached, PID: " << getpid() << std::endl;
     while (!attached)
         sleep(1);
+}
+
+void attach_debugger_env() {
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    char *debug_rank_str = std::getenv("DEBUG_MPI_RANK");
+    if (debug_rank_str != nullptr) {
+        bool debug_this_rank = false;
+        try {
+            unsigned int debug_rank = std::stoul(debug_rank_str);
+            debug_this_rank = (debug_rank == rank);
+        } catch (std::invalid_argument) {
+        }
+
+        if (debug_this_rank) {
+            printf("Debugging rank %i\n", rank);
+        }
+        attach_debugger(debug_this_rank);
+    }
 }

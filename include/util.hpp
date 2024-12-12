@@ -22,6 +22,8 @@ struct region {
         globalStartIndex(globalStartIndex), size(size) {}
 };
 
+inline bool region_not_empty(const region &r) { return r.size != 0; }
+
 template<typename T>
 inline T round_up_to_multiple(T x, T n) {
     return (x % n == 0) ? x : x + n - (x % n);
