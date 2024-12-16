@@ -6,9 +6,9 @@
 using std::vector;
 
 // https://xkcd.com/221
-constexpr int OUTGOING_SIZE_MSG_TAG = 1336285539;
-constexpr int OUTGOING_MSG_TAG = 1336285540;
-constexpr int TRANSFER_MSG_TAG = 1336285541;
+constexpr int OUTGOING_SIZE_MSG_TAG = 20232;
+constexpr int OUTGOING_MSG_TAG = 20233;
+constexpr int TRANSFER_MSG_TAG = 20234;
 
 class DualTreeSummation : public Summation {
 public:
