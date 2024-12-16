@@ -189,8 +189,8 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
         uint64_t elementsWritten = 0;
 
         for (uint64_t i = 0; i + stride <= elementsInBuffer; i += stride) {
-            __m256d a = _mm256_load_pd(&buffer[i]);
-            __m256d b = _mm256_load_pd(&buffer[i + 4]);
+            __m256d a = _mm256_loadu_pd(&buffer[i]);
+            __m256d b = _mm256_loadu_pd(&buffer[i + 4]);
             __m256d level1Sum = _mm256_hadd_pd(a, b);
 
             __m128d c = _mm256_extractf128_pd(level1Sum, 1); // Fetch upper 128bit
