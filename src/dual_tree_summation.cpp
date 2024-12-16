@@ -35,11 +35,11 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
     for (auto permuted_child_rank: topology.get_comm_children()) {
         const auto child_rank = array_to_rank_order(permuted_child_rank);
         uint64_t count;
-        MPI_Recv(&count, 1, MPI_UINT64_T, child_rank, OUTGOING_SIZE_MSG_TAG, comm, nullptr);
+        MPI_Recv(&count, 1, MPI_UINT64_T, child_rank, OUTGOING_SIZE_MSG_TAG, comm, MPI_STATUS_IGNORE);
 
         vector<TreeCoordinates> incoming_from_child(count);
         MPI_Recv(incoming_from_child.data(), count * sizeof(TreeCoordinates), MPI_BYTE, child_rank, OUTGOING_MSG_TAG,
-                 comm, nullptr);
+                 comm, MPI_STATUS_IGNORE);
 
         incoming[child_rank] = incoming_from_child;
 
@@ -111,7 +111,7 @@ double DualTreeSummation::accumulate(void) {
 #ifdef DEBUG_TRACE
         std::cout << std::format("rank {} receiving {} elements to rank {}\n", rank, count, child_rank);
 #endif
-        MPI_Recv(comm_buffer.data(), count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, nullptr);
+        MPI_Recv(comm_buffer.data(), count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
 
         // Insert values from temporary buffer into inbox map
         for (auto i = 0UL; i < count; ++i) {
