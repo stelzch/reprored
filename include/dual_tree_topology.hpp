@@ -1,7 +1,6 @@
 #pragma once
 #include <cassert>
 #include <cmath>
-#include <format>
 #include <string>
 #include <util.hpp>
 
