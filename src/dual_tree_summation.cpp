@@ -1,6 +1,7 @@
 #include "dual_tree_summation.hpp"
 
 #include <cmath>
+#include <immintrin.h>
 #include <iostream>
 
 bool DualTreeSummation::is_passthrough_element(unsigned long x) {
@@ -180,19 +181,28 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     double *buffer = &accumulation_buffer.at(x - topology.get_local_start_index());
 
 
-    constexpr auto stride = 2;
-    for (int y = 1; y <= maxY; ++y) {
+    constexpr auto stride = 8;
+    for (int y = 1; y <= maxY; y += 3) {
         uint64_t elementsWritten = 0;
-        for (uint64_t i = 0; i + stride <= elementsInBuffer; i += stride) {
-            double a = buffer[i];
-            double b = buffer[i + 1];
 
-            buffer[elementsWritten++] = a + b;
+        for (uint64_t i = 0; i + stride <= elementsInBuffer; i += stride) {
+            __m256d a = _mm256_loadu_pd(&buffer[i]);
+            __m256d b = _mm256_loadu_pd(&buffer[i + 4]);
+            __m256d level1Sum = _mm256_hadd_pd(a, b);
+
+            __m128d c = _mm256_extractf128_pd(level1Sum, 1); // Fetch upper 128bit
+            __m128d d = _mm256_castpd256_pd128(level1Sum); // Fetch lower 128bit
+            __m128d level2Sum = _mm_add_pd(c, d);
+
+            __m128d level3Sum = _mm_hadd_pd(level2Sum, level2Sum);
+
+            buffer[elementsWritten++] = _mm_cvtsd_f64(level3Sum);
         }
 
         const auto remainder = elementsInBuffer - stride * elementsWritten;
         if (remainder) {
-            buffer[elementsWritten++] = buffer[elementsInBuffer - 1];
+            const double a = sum_remaining_8tree(remainder, y, &buffer[stride * elementsWritten]);
+            buffer[elementsWritten++] = a;
         }
         elementsInBuffer = elementsWritten;
     }
