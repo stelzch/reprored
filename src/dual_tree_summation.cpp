@@ -173,15 +173,6 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
         return accumulation_buffer.at(x - topology.get_local_start_index());
     }
 
-    const auto right_x = x + topology.pow2(maxY - 1);
-    if (right_x >= topology.get_local_end_index()) {
-        return local_accumulate(x, maxY - 1);
-    }
-
-    return local_accumulate(x, maxY - 1) + local_accumulate(right_x, maxY - 1);
-
-
-    /*
     // Iterative approach
     const auto end_index = std::min(x + topology.pow2(maxY), topology.get_global_size());
     uint64_t elementsInBuffer = end_index - x;
@@ -189,16 +180,18 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     double *buffer = &accumulation_buffer.at(x - topology.get_local_start_index());
 
 
+    constexpr auto stride = 2;
     for (int y = 1; y <= maxY; ++y) {
         uint64_t elementsWritten = 0;
-        for (uint64_t i = 0; i < elementsInBuffer; i += 2) {
+        for (uint64_t i = 0; i + stride <= elementsInBuffer; i += stride) {
             double a = buffer[i];
             double b = buffer[i + 1];
 
             buffer[elementsWritten++] = a + b;
         }
 
-        if (elementsInBuffer < elementsWritten) {
+        const auto remainder = elementsInBuffer - stride * elementsWritten;
+        if (remainder) {
             buffer[elementsWritten++] = buffer[elementsInBuffer - 1];
         }
         elementsInBuffer = elementsWritten;
@@ -207,7 +200,6 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     assert(elementsInBuffer == 1);
 
     return buffer[0];
-    */
 }
 
 double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
