@@ -227,11 +227,9 @@ double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
         try {
             return accumulation_buffer.at(x - topology.get_local_start_index());
         } catch (...) {
-            std::cerr << std::format("rank {} could not read value {} from local buffer starting at {}", rank, x,
-                                     topology.get_local_start_index())
-                      << std::endl;
-            while (1) {
-            }
+            fprintf(stderr, "rank %lu could not read value %lu from local buffer starting at %lu\n", rank, x,
+                    topology.get_local_start_index());
+            assert(0);
         }
     }
 
