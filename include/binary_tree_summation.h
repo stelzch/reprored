@@ -23,6 +23,7 @@ void store_summand(ReductionContext context, uint64_t local_idx, double val);
 double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);
+const char *get_reproducible_reduction_mode();
 
 #ifdef __cplusplus
 }
