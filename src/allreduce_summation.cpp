@@ -1,5 +1,6 @@
 #include "allreduce_summation.hpp"
 #include <numeric>
+#include <execution>
 
 AllreduceSummation::AllreduceSummation(MPI_Comm comm, size_t local_summands)
     : local_summands(local_summands), comm(comm), buffer(local_summands) {
@@ -13,7 +14,7 @@ double *AllreduceSummation::getBuffer() { return buffer.data(); }
 
 double AllreduceSummation::accumulate() {
   auto local_sum =
-      std::reduce(buffer.begin(), buffer.end(), 0.0, std::plus<double>());
+      std::reduce(std::execution::par_unseq, buffer.begin(), buffer.end(), 0.0, std::plus<double>());
 
   // Reducation across communicator
   double sum;
