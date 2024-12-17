@@ -24,6 +24,7 @@ double reproducible_reduce(ReductionContext);
 double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);
 const char *get_reproducible_reduction_mode();
+uint64_t get_reproducible_reduction_counter();
 
 #ifdef __cplusplus
 }

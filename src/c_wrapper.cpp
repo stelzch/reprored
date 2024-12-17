@@ -11,6 +11,7 @@
 
 /* TODO: Remove global state. This is a crude hack. */
 MPI_Comm default_communicator = MPI_COMM_WORLD;
+uint64_t reduction_counter = 0;
 
 enum ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER };
 ReductionMode env2mode();
@@ -37,7 +38,7 @@ std::string reduction_mode_to_string(ReductionMode rm) {
     }
 }
 
-std::string reduction_mode_string = reduction_mode_to_string(global_reduction_mode) + std::string(" default K=") + std::to_string(global_k);
+std::string reduction_mode_string = reduction_mode_to_string(global_reduction_mode) + std::string(" K=") + std::to_string(global_k);
 
 void set_default_reduction_context_communicator(intptr_t communicator) {
   MPI_Comm comm = (MPI_Comm)(communicator);
@@ -153,7 +154,6 @@ union num {
   unsigned char bytes[8];
 };
 
-uint64_t reduction_counter = 0;
 
 double reproducible_reduce(ReductionContext ctx) {
   auto *ptr = static_cast<Summation *>(ctx);
@@ -187,4 +187,7 @@ void store_summand(ReductionContext ctx, uint64_t local_idx, double val) {
 
 const char *get_reproducible_reduction_mode() {
     return reduction_mode_string.c_str();
+}
+uint64_t get_reproducible_reduction_counter() {
+    return reduction_counter;
 }
