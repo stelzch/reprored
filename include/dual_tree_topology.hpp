@@ -133,7 +133,7 @@ public:
             return largest_child_index >= local_start_index && largest_child_index < comm_end_index;
         } else {
             assert(y >= 0);
-            return x >= local_start_index && x < local_end_index;
+            return x >= local_start_index && x < comm_end_index;
         }
     }
 
@@ -207,7 +207,7 @@ private:
 
         uint64_t x = local_start_index;
 
-        while (x < local_end_index) {
+        while (x < comm_end_index) {
             for (int32_t y = max_y(x, global_size); y >= 0; --y) {
                 if (is_subtree_local(x, y)) {
                     outgoing.emplace_back(x, y);
@@ -219,8 +219,7 @@ private:
                     // add to outbox
                     outgoing.emplace_back(x, y);
 
-                    // Stop search for new values
-                    x = local_end_index;
+                    x += pow2(y);
                     break;
                 }
             }

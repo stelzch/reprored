@@ -24,6 +24,17 @@ struct region {
 
 inline bool region_not_empty(const region &r) { return r.size != 0; }
 
+template<typename It>
+inline uint64_t total_region_size(const It &begin, const It &end) {
+    uint64_t size = 0;
+
+    for (auto it = begin; it != end; ++it) {
+        size += it->size;
+    }
+
+    return size;
+}
+
 template<typename T>
 inline T round_up_to_multiple(T x, T n) {
     return (x % n == 0) ? x : x + n - (x % n);

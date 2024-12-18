@@ -23,7 +23,6 @@ public:
     /* Sum all numbers. Will return the total sum on rank 0
      */
     double accumulate(void) override;
-    double fetch_or_accumulate(uint64_t x, uint32_t y);
     double local_accumulate(uint64_t x, uint32_t y);
 
     using TreeCoordinates = std::pair<uint64_t, uint32_t>;
@@ -35,6 +34,7 @@ private:
     double accumulate(uint64_t x, uint32_t y);
     void flush();
 
+    vector<region> compute_normalized_regions(const vector<region> &regions) const;
     const vector<int> compute_rank_order(const vector<region> &regions) const;
     const vector<int> compute_inverse_rank_order(const vector<int> &rank_order) const;
     const vector<region> compute_permuted_regions(const vector<region> &regions) const;
@@ -68,6 +68,8 @@ private:
     const uint64_t comm_size;
     const uint64_t rank;
 
+    const vector<region> regions;
+
     /**
      * DualTreeTopology assumes that ranks are ordered in ascending order of the array indices (i.e. the first elements
      * are on rank 0, the next on rank 1 and so on) This might not necessarily be true (e.g. RAxML-NG can assign the
@@ -93,12 +95,9 @@ private:
      */
     const vector<int> rank_order; // maps array order -> PE rank
     const vector<int> inverse_rank_order; // maps PE rank -> array order
-    const vector<region> regions;
 
     const DualTreeTopology topology;
     map<int, vector<TreeCoordinates>> incoming; // map unpermuted rank -> list of sent values
-    vector<TreeCoordinates>
-            passthrough_elements; // elements that are passed from comm child to comm parent without modification
     vector<TreeCoordinates> outgoing;
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;

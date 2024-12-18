@@ -3,6 +3,9 @@
 #include <cmath>
 #include <immintrin.h>
 #include <iostream>
+#include <set>
+
+#include "binary_tree_summation.h"
 
 
 #ifdef DEBUG_TRACE
@@ -10,13 +13,13 @@
 auto print_tuple(const TreeCoordinates &rhs) { return std::format("({}, {})", rhs.first, rhs.second); }
 #endif
 
-DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &regions, MPI_Comm comm) :
+DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &regions_, MPI_Comm comm) :
     comm{comm},
-    comm_size(regions.size()),
+    comm_size(regions_.size()),
     rank{rank},
+    regions{compute_normalized_regions(regions_)},
     rank_order{compute_rank_order(regions)},
     inverse_rank_order{compute_inverse_rank_order(rank_order)},
-    regions{regions},
     topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions)},
     outgoing(topology.get_locally_computed()),
     rank_of_comm_parent(
@@ -39,14 +42,6 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
                  comm, MPI_STATUS_IGNORE);
 
         incoming[child_rank] = incoming_from_child;
-
-        for (const auto &coords: incoming_from_child) {
-            // If a certain value is not consumed in the local computations, simply pass it along the communication tree
-            if (rank_to_array_order(rank) != 0 && topology.is_passthrough_element(coords.first, coords.second)) {
-                passthrough_elements.push_back(coords);
-                outgoing.push_back(coords);
-            }
-        }
     }
 
     // 2. Send out our outgoing values to parent in comm tree
@@ -114,11 +109,7 @@ double DualTreeSummation::accumulate(void) {
             const auto key = incoming[array_to_rank_order(permuted_child_rank)][i];
             const auto value = comm_buffer[i];
 
-            if (topology.is_passthrough_element(key.first, key.second)) {
-                outbox[key] = value;
-            } else {
-                inbox[key] = value;
-            }
+            inbox[key] = value;
         }
     }
 
@@ -175,17 +166,6 @@ double DualTreeSummation::accumulate(void) {
     return result;
 }
 
-
-double DualTreeSummation::fetch_or_accumulate(uint64_t x, uint32_t y) {
-    const auto &e = inbox.find(TreeCoordinates(x, y));
-
-    if (e == inbox.end()) {
-        return accumulate(x, y);
-    } else {
-        return e->second;
-    }
-}
-
 /** Special case where the subtree under (x,y) is fully local, we do not need to perform any boundary checks */
 double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     if (maxY == 0) {
@@ -235,6 +215,9 @@ double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
     std::cout << std::format("rank {} reducing ({}, {})\n", rank, x, y);
 #endif
 
+    if (const auto e = inbox.find(TreeCoordinates(x, y)); e != inbox.end()) {
+        return e->second;
+    }
 
     if (topology.is_subtree_local(x, y)) {
         return local_accumulate(x, y);
@@ -244,6 +227,7 @@ double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
         } catch (...) {
             fprintf(stderr, "rank %lu could not read value %lu from local buffer starting at %lu\n", rank, x,
                     topology.get_local_start_index());
+            attach_debugger(true);
             assert(0);
         }
     }
@@ -252,13 +236,28 @@ double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
     const TreeCoordinates right_child = {x + DualTreeTopology::pow2(y - 1), y - 1};
 
 
-    double left_child_val = fetch_or_accumulate(left_child.first, left_child.second);
+    double left_child_val = accumulate(left_child.first, left_child.second);
     if (right_child.first < topology.get_global_size()) {
-        double right_child_val = fetch_or_accumulate(right_child.first, right_child.second);
+        double right_child_val = accumulate(right_child.first, right_child.second);
         return left_child_val + right_child_val;
     } else {
         return left_child_val;
     }
+}
+
+vector<region> DualTreeSummation::compute_normalized_regions(const vector<region> &regions) const {
+    const auto global_size = total_region_size(regions.begin(), regions.end());
+    vector<region> result;
+
+    for (const auto &r: regions) {
+        if (r.size == 0) {
+            result.emplace_back(global_size, 0);
+        } else {
+            result.emplace_back(r.globalStartIndex, r.size);
+        }
+    }
+
+    return result;
 }
 
 const vector<int> DualTreeSummation::compute_rank_order(const vector<region> &regions) const {
