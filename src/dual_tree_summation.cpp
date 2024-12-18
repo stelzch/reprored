@@ -143,7 +143,9 @@ double DualTreeSummation::accumulate(void) {
 
 #endif
     }
+#ifdef DEBUG_TRACE
     printf("\n");
+#endif
 
     assert(rank_to_array_order(rank) != 0 || is_root);
 
