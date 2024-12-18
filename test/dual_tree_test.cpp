@@ -248,7 +248,7 @@ TEST(DualTree, Fuzzer) {
     unsigned long seed;
 
     if (full_comm_rank == 0) {
-        seed = 53; // rd();
+        seed = rd();
     }
     MPI_Bcast(&seed, 1, MPI_UNSIGNED_LONG, 0, comm);
 
@@ -291,11 +291,15 @@ TEST(DualTree, Fuzzer) {
             auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
             if (full_comm_rank == 0) {
-                printf("n=%zu, p=%zu, distribution=", data_array_size, ranks);
+                printf("n=%zu, p=%zu, distribution={", data_array_size, ranks);
                 for (auto i = 0; i < ranks; ++i) {
-                    printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
+                    printf("{%i, %i}", distribution.displs[i], distribution.send_counts[i]);
+                    const bool last_element = i == ranks - 1;
+                    if (!last_element) {
+                        printf(", ");
+                    }
                 }
-                printf("\n");
+                printf("}\n");
             }
 
             with_comm_size_n(comm, ranks,
