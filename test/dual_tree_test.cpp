@@ -35,7 +35,7 @@ vector<DualTreeTopology> instantiate_all_ranks(const vector<region> &regions) {
  *   ├───┐   ├───┐   ├───┐   ├───┐   ├───┐   │
  *   0   1   2   3   4   5   6   7   8   9  10
  */
-TEST(DualTreeTest, BinaryTreePrimitives) {
+TEST(DualTree, BinaryTreePrimitives) {
     const auto global_size = 11;
     const vector<region> exampleA{{0, global_size}};
 
@@ -98,7 +98,7 @@ TEST(DualTreeTest, BinaryTreePrimitives) {
  *        │
  *
  */
-TEST(DualTreeTest, ExampleA) {
+TEST(DualTree, ExampleA) {
     const vector<region> exampleA{{0, 3}, {3, 4}, {7, 1}, {8, 2}, {10, 1}};
 
     const auto t = instantiate_all_ranks(exampleA);
@@ -141,7 +141,7 @@ TEST(DualTreeTest, ExampleA) {
  *    │◄──────────────────┘
  *    │        Communication Tree
  */
-TEST(DualTreeTest, ExampleB) {
+TEST(DualTree, ExampleB) {
     const vector<region> exampleB{{0, 1}, {1, 2}, {3, 5}, {8, 3}};
 
     const auto t = instantiate_all_ranks(exampleB);
@@ -186,7 +186,7 @@ TEST(DualTreeTest, ExampleB) {
  *        │
  *
  */
-TEST(DualTreeTest, ExampleC) {
+TEST(DualTree, ExampleC) {
     const vector<region> exampleC{{0, 4}, {4, 2}, {6, 3}, {9, 2}, {11, 2}, {13, 1}, {14, 2}};
     const auto t = instantiate_all_ranks(exampleC);
 
@@ -302,27 +302,31 @@ TEST(DualTree, Fuzzer) {
                 printf("}\n");
             }
 
-            with_comm_size_n(comm, ranks,
-                             [&distribution, &data_array, &ranks, &reference_result](auto comm_, auto rank, auto size) {
-                                 MPI_Barrier(comm_);
-                                 int comm_size;
-                                 MPI_Comm_size(comm_, &comm_size);
-                                 ASSERT_EQ(static_cast<int>(ranks), comm_size);
-                                 ASSERT_EQ(distribution.displs.size(), comm_size);
-                                 ASSERT_EQ(distribution.send_counts.size(), comm_size);
+            double result;
+            with_comm_size_n(
+                    comm, ranks,
+                    [&distribution, &data_array, &ranks, &reference_result, &result](auto comm_, auto rank, auto size) {
+                        MPI_Barrier(comm_);
+                        int comm_size;
+                        MPI_Comm_size(comm_, &comm_size);
+                        ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                        ASSERT_EQ(distribution.displs.size(), comm_size);
+                        ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                                 DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
+                        DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
 
-                                 std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
-                                 if (local_arr.size() > dts.getBufferSize()) {
-                                     attach_debugger(true);
-                                 }
-                                 EXPECT_LE(local_arr.size(), dts.getBufferSize());
-                                 memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                        std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
+                        if (local_arr.size() > dts.getBufferSize()) {
+                            attach_debugger(true);
+                        }
+                        EXPECT_LE(local_arr.size(), dts.getBufferSize());
+                        memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
-                                 double result = dts.accumulate();
-                                 EXPECT_EQ(result, reference_result);
-                             });
+                        result = dts.accumulate();
+                    });
+            if (full_comm_rank < ranks) {
+                EXPECT_EQ(result, reference_result);
+            }
             ++checks;
         }
     }
@@ -341,27 +345,53 @@ TEST(DualTree, DifficultDistributions) {
     MPI_Comm_size(full_comm, &comm_size);
 
 
-    vector<vector<region>> test_distributions {
-        {{7, 4}, {11, 2}, {0, 7}, {13, 6}, {25, 2}, {19, 6}},
-        {{91, 45}, {0, 42}, {47, 44}, {42, 5}},
-       {{4, 8}, {12, 2}, {0, 4}, {4, 0}},
-        {{54, 46}, {100, 36}, {0, 15}, {53, 1}, {15, 38}},
+    vector<vector<region>> test_distributions{
+            {{16, 17}, {13, 2}, {15, 1}, {4, 1}, {5, 8}, {0, 4}, {33, 3}, {36, 2}},
+            {{99, 73}, {0, 42}, {172, 16}, {42, 57}},
+            {{86, 15}, {45, 14}, {0, 43}, {101, 72}, {43, 2}, {59, 27}},
+            {{0, 51}, {119, 11}, {68, 7}, {51, 16}, {67, 1}, {75, 44}},
+            {{7, 4}, {11, 2}, {0, 7}, {13, 6}, {25, 2}, {19, 6}},
+            {{91, 45}, {0, 42}, {47, 44}, {42, 5}},
+            {{4, 8}, {12, 2}, {0, 4}, {4, 0}},
+            {{54, 46}, {100, 36}, {0, 15}, {53, 1}, {15, 38}},
     };
 
-    for (const auto& regions : test_distributions) {
+    for (const auto &regions: test_distributions) {
+        MPI_Barrier(MPI_COMM_WORLD);
         ASSERT_GE(comm_size, regions.size());
         uint64_t global_array_length = 0;
-        for (const auto &[i, size] : regions) {
+        for (const auto &[i, size]: regions) {
             global_array_length += size;
         }
 
         ASSERT_GE(comm_size, regions.size());
 
+        vector<double> v = generate_test_vector(global_array_length, 4);
 
-        with_comm_size_n(full_comm, regions.size(), [&,  &regions](auto comm, auto rank, auto size) {
+        double reference = std::accumulate(v.begin(), v.end(), 0.0);
+
+        double reference_xor = 1;
+
+        MPI_Allreduce(&reference, &reference_xor, 8, MPI_BYTE, MPI_BXOR, MPI_COMM_WORLD);
+        ASSERT_EQ(reference_xor, 0);
+
+        double single_rank_result = 0.0;
+
+        with_comm_size_n(full_comm, 1, [global_array_length, &v, &single_rank_result](auto comm, auto rank, auto size)  {
+            const vector<region> single_region = {{0, global_array_length}};
+            const auto distribution = distribute_evenly(v.size(), 1);
+            const auto single_region_ii = regions_from_distribution(distribution);
+            DualTreeSummation dts(0, single_region_ii, comm);
+            memcpy(dts.getBuffer(), v.data(), v.size() * sizeof(double));
+
+            single_rank_result = dts.accumulate();
+        });
+
+        MPI_Bcast(&single_rank_result, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+        with_comm_size_n(full_comm, regions.size(), [regions, single_rank_result, reference, &v](auto comm, auto rank, auto size) {
+            ASSERT_NEAR(single_rank_result, reference, 1e-3);
             Distribution d(size);
-            vector<double> v = generate_test_vector(global_array_length, 4);
-            double reference = std::accumulate(v.begin(), v.end(), 0.0);
 
             // Convert regions to distribution
             for (auto i = 0U; i < size; ++i) {
@@ -374,6 +404,8 @@ TEST(DualTree, DifficultDistributions) {
             memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
             double result = dts.accumulate();
+
+            EXPECT_EQ(single_rank_result, result);
             EXPECT_NEAR(reference, result, 1e-9);
         });
     }
