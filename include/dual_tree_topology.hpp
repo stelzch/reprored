@@ -86,12 +86,19 @@ public:
 
     /**
      * Get the maximum level of the subtree rooted at given index.
+     * Does not perform boundary checks.
+     */
+    static inline uint16_t max_y_untrunc(const uint32_t index, const uint64_t global_size) {
+        return std::countr_zero(index);
+    }
+    /**
+     * Get the maximum level of the subtree rooted at given index.
      * Does perform boundary checks at the end of the tree in case the global number of elements is not a power of 2.
      */
     static inline uint16_t max_y(const uint32_t index, const uint64_t global_size) {
         if (index != 0 && largest_child_index(index) < global_size) {
             // Normal case, i.e. non-zero index without truncated subtree
-            return std::countr_zero(index);
+            return max_y_untrunc(index, global_size);
         } else {
             const auto end_index = index == 0 ? global_size : std::min(global_size, largest_child_index(index) + 1);
             return std::ceil(std::log2(end_index - index));
@@ -128,6 +135,39 @@ public:
             assert(y >= 0);
             return x >= local_start_index && x < local_end_index;
         }
+    }
+
+    TreeCoordinates get_reduction_partner(uint64_t x, uint32_t y) const {
+        const auto _max_y = max_y_untrunc(x, global_size);
+        assert(y <= _max_y);
+
+        if (y < _max_y) {
+            // Reduce into our index, a.k.a. other value comes from the right
+            uint64_t other_x = x + pow2(y);
+            uint32_t other_y = y;
+
+            if (other_x < global_size) {
+                return TreeCoordinates(other_x, other_y);
+            } else {
+                return TreeCoordinates(parent(x), _max_y);
+            }
+
+        } else {
+            // Reduce into other index, a.k.a. our value moves to the left
+            assert(x >= pow2(y));
+            return TreeCoordinates(parent(x), y);
+        }
+    }
+
+    bool is_passthrough_element(const uint64_t x, uint32_t y) const {
+        if (rank == 0) {
+            return false;
+        }
+        const auto next_element_needed_in_reduction = get_reduction_partner(x, y);
+        return get_local_size() == 0 || parent(x) < get_local_start_index() ||
+               !is_subtree_comm_local(next_element_needed_in_reduction.first, next_element_needed_in_reduction.second);
+        // return rank != 0 && (get_local_size() == 0 || parent(x) < local_start_index ||
+        //                      next_element_needed_in_reduction >= comm_end_index);
     }
 
     uint64_t get_local_size() const { return local_end_index - local_start_index; }
@@ -236,7 +276,6 @@ private:
     const uint64_t local_start_index;
 
 
-private:
     /** Global index of first element that is no longer located on this rank. */
     const uint64_t local_end_index;
 
@@ -244,7 +283,6 @@ private:
     const uint64_t global_size;
 
 
-private:
     /** The global index of the first element that no longer located on a rank that sends their intermediate
      * results to us. I.e. the global start index of the first PE with a higher rank than ours who sends their results
      * to a rank lower than us. This is important because we do not have to wait on intermediate results with index

@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <mpi.h>
+
+#include "binary_tree_summation.h"
 #include "gtest-mpi-listener.hpp"
 
 int main(int argc, char **argv) {
@@ -13,10 +15,11 @@ int main(int argc, char **argv) {
     }
 
     ::testing::AddGlobalTestEnvironment(new GTestMPIListener::MPIEnvironment);
-    ::testing::TestEventListeners& listeners = ::testing::UnitTest::GetInstance()->listeners();
-    ::testing::TestEventListener* l = listeners.Release(listeners.default_result_printer());
+    ::testing::TestEventListeners &listeners = ::testing::UnitTest::GetInstance()->listeners();
+    ::testing::TestEventListener *l = listeners.Release(listeners.default_result_printer());
     listeners.Append(new GTestMPIListener::MPIWrapperPrinter(l, MPI_COMM_WORLD));
 
+    attach_debugger_env();
     auto result = RUN_ALL_TESTS();
 
     return result;

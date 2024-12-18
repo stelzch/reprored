@@ -4,9 +4,6 @@
 #include <immintrin.h>
 #include <iostream>
 
-bool DualTreeSummation::is_passthrough_element(unsigned long x) {
-    return topology.get_local_size() == 0 || topology.parent(x) < topology.get_local_start_index();
-}
 
 #ifdef DEBUG_TRACE
 #include <format>
@@ -45,8 +42,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
 
         for (const auto &coords: incoming_from_child) {
             // If a certain value is not consumed in the local computations, simply pass it along the communication tree
-            auto x = coords.first;
-            if (rank_to_array_order(rank) != 0 && is_passthrough_element(x)) {
+            if (rank_to_array_order(rank) != 0 && topology.is_passthrough_element(coords.first, coords.second)) {
                 passthrough_elements.push_back(coords);
                 outgoing.push_back(coords);
             }
@@ -69,7 +65,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
 
 
 #ifdef DEBUG_TRACE
-    std::cout << std::format("rank {} (permuted {}) region {}-{} incoming ", rank, array_to_rank_order(rank),
+    std::cout << std::format("rank {} (permuted {}) region {}-{} incoming ", rank, rank_to_array_order(rank),
                              regions[rank].globalStartIndex, regions[rank].globalStartIndex + regions[rank].size);
 
     for (const auto &e: incoming) {
@@ -118,7 +114,7 @@ double DualTreeSummation::accumulate(void) {
             const auto key = incoming[array_to_rank_order(permuted_child_rank)][i];
             const auto value = comm_buffer[i];
 
-            if (is_passthrough_element(key.first)) {
+            if (topology.is_passthrough_element(key.first, key.second)) {
                 outbox[key] = value;
             } else {
                 inbox[key] = value;
@@ -126,11 +122,28 @@ double DualTreeSummation::accumulate(void) {
         }
     }
 
+#ifdef DEBUG_TRACE
+    for (const auto &[other_rank, coords]: incoming) {
+        for (const auto &coord: coords) {
+            if (!(inbox.contains(coord) || outbox.contains(coord))) {
+                fprintf(stderr, "rank %i expected to receive (%lu, %lu) from rank %i, but it was not delivered\n", rank,
+                        coord.first, coord.second, other_rank);
+            }
+        }
+    }
+    printf("rank %i computing ", rank);
+#endif
+
 
     // 2. Compute local values
     for (const auto &coords: topology.get_locally_computed()) {
         outbox[coords] = accumulate(coords.first, coords.second);
+#ifdef DEBUG_TRACE
+        printf(" (%lu, %u) = %f  ", coords.first, coords.second, outbox[coords]);
+
+#endif
     }
+    printf("\n");
 
     assert(rank_to_array_order(rank) != 0 || is_root);
 

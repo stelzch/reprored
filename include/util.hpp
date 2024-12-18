@@ -67,6 +67,8 @@ using Distribution = struct Distribution {
     std::vector<int> send_counts;
     std::vector<int> displs;
 
+    Distribution(int comm_size) :
+        send_counts(comm_size), displs(comm_size) {}
     Distribution(std::vector<int> _send_counts, std::vector<int> recv_displs) :
         send_counts(_send_counts), displs(recv_displs) {}
 };

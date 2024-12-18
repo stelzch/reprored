@@ -40,6 +40,15 @@ TEST(DualTreeTest, BinaryTreePrimitives) {
     const vector<region> exampleA{{0, global_size}};
 
     DualTreeTopology topology(0, exampleA);
+
+    EXPECT_EQ(topology.get_reduction_partner(0, 2), TC(4, 2));
+    EXPECT_EQ(topology.get_reduction_partner(4, 0), TC(5, 0));
+    EXPECT_EQ(topology.get_reduction_partner(4, 1), TC(6, 1));
+    EXPECT_EQ(topology.get_reduction_partner(9, 0), TC(8, 0));
+    EXPECT_EQ(topology.get_reduction_partner(10, 0), TC(8, 1));
+    EXPECT_EQ(topology.get_reduction_partner(10, 1), TC(8, 1));
+
+
     EXPECT_EQ(topology.max_y(0, global_size), 4);
     EXPECT_EQ(topology.max_y(1, global_size), 0);
     EXPECT_EQ(topology.max_y(2, global_size), 1);
@@ -232,7 +241,7 @@ TEST(DualTree, Fuzzer) {
     // ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
     constexpr auto NUM_ARRAYS = 20000; // 15;
-    constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
+    constexpr auto NUM_DISTRIBUTIONS = 5000;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
@@ -247,7 +256,6 @@ TEST(DualTree, Fuzzer) {
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
     std::mt19937 rng(seed); // RNG for distribution & rank number
     std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
-    attach_debugger_env();
 
     auto checks = 0UL;
 
@@ -308,11 +316,11 @@ TEST(DualTree, Fuzzer) {
                                  EXPECT_LE(local_arr.size(), dts.getBufferSize());
                                  memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
-                    double result = dts.accumulate();
-                    EXPECT_EQ(result, reference_result);
-                });
-                ++checks;
-            }
+                                 double result = dts.accumulate();
+                                 EXPECT_EQ(result, reference_result);
+                             });
+            ++checks;
+        }
     }
 
     if (full_comm_rank == 0) {
@@ -321,44 +329,49 @@ TEST(DualTree, Fuzzer) {
 }
 
 
-class ReductionTest : public ::testing::TestWithParam<Distribution> {
-public:
-    void SetUp() override {
-        full_comm = MPI_COMM_WORLD;
-        MPI_Comm_rank(full_comm, &rank);
-        MPI_Comm_size(full_comm, &comm_size);
-        regions = regions_from_distribution(GetParam());
-        global_array_length = std::accumulate(GetParam().send_counts.begin(), GetParam().send_counts.end(), 0);
-    }
-protected:
-    vector<region> regions;
-    uint64_t global_array_length;
+TEST(DualTree, DifficultDistributions) {
+    MPI_Comm full_comm = MPI_COMM_WORLD;
     int comm_size;
     int rank;
-    MPI_Comm full_comm;
+    MPI_Comm_rank(full_comm, &rank);
+    MPI_Comm_size(full_comm, &comm_size);
 
-};
-TEST_P(ReductionTest, DifficultDistributions) {
-    const Distribution d = GetParam();
-    const auto regions = regions_from_distribution(d);
 
-    ASSERT_GE(comm_size, regions.size());
+    vector<vector<region>> test_distributions {
+        {{7, 4}, {11, 2}, {0, 7}, {13, 6}, {25, 2}, {19, 6}},
+        {{91, 45}, {0, 42}, {47, 44}, {42, 5}},
+       {{4, 8}, {12, 2}, {0, 4}, {4, 0}},
+        {{54, 46}, {100, 36}, {0, 15}, {53, 1}, {15, 38}},
+    };
 
-    vector<double> v = generate_test_vector(global_array_length, 4);
-    double reference = std::accumulate(v.begin(), v.end(), 0.0);
+    for (const auto& regions : test_distributions) {
+        ASSERT_GE(comm_size, regions.size());
+        uint64_t global_array_length = 0;
+        for (const auto &[i, size] : regions) {
+            global_array_length += size;
+        }
 
-    with_comm_size_n(full_comm, regions.size(), [&,  &regions](auto comm, auto rank, auto size) {
-        auto local_arr = scatter_array(full_comm, v, d);
-        DualTreeSummation dts(rank, regions, comm);
+        ASSERT_GE(comm_size, regions.size());
 
-        double result = dts.accumulate();
-        EXPECT_NEAR(reference, result, 1e-9);
-    });
+
+        with_comm_size_n(full_comm, regions.size(), [&,  &regions](auto comm, auto rank, auto size) {
+            Distribution d(size);
+            vector<double> v = generate_test_vector(global_array_length, 4);
+            double reference = std::accumulate(v.begin(), v.end(), 0.0);
+
+            // Convert regions to distribution
+            for (auto i = 0U; i < size; ++i) {
+                d.displs[i] = static_cast<int>(regions[i].globalStartIndex);
+                d.send_counts[i] = static_cast<int>(regions[i].size);
+            }
+
+            auto local_arr = scatter_array(comm, v, d);
+            DualTreeSummation dts(rank, regions, comm);
+            memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+
+            double result = dts.accumulate();
+            EXPECT_NEAR(reference, result, 1e-9);
+        });
+    }
 }
 
-//(4, 8) (12, 2) (0, 4) (4, 0)
-const Distribution d1 {{8, 2, 4, 0}, {4, 12, 0, 4}};
-INSTANTIATE_TEST_SUITE_P(
-    MDistributionTests,
-    ReductionTest,
-    testing::Values(d1));

@@ -12,7 +12,6 @@ constexpr int TRANSFER_MSG_TAG = 20234;
 
 class DualTreeSummation : public Summation {
 public:
-    bool is_passthrough_element(unsigned long x);
     DualTreeSummation(uint64_t rank, const vector<region> &regions, MPI_Comm comm = MPI_COMM_WORLD);
 
     virtual ~DualTreeSummation();
