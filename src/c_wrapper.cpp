@@ -17,9 +17,26 @@ enum ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER };
 ReductionMode env2mode();
 uint64_t env2k();
 
-// Load parameters from enviornment variables
+// Load parameters from environment variables
 ReductionMode global_reduction_mode = env2mode();
 uint64_t global_k = env2k();
+
+std::string reduction_mode_to_string(ReductionMode rm) {
+    switch(rm) {
+        case ALLREDUCE:
+            return "ALLREDUCE";
+        case REPROBLAS:
+            return "REPROBLAS";
+        case BINARY_TREE:
+            return "BINARY_TREE";
+        case KGATHER:
+            return "KGATHER";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+std::string reduction_mode_string = reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k);
 
 void set_default_reduction_context_communicator(intptr_t communicator) {
     MPI_Comm comm = (MPI_Comm) (communicator);
@@ -189,4 +206,8 @@ void attach_debugger_env() {
         }
         attach_debugger(debug_this_rank);
     }
+}
+
+const char *get_reproducible_reduction_mode() {
+    return reduction_mode_string.c_str();
 }
