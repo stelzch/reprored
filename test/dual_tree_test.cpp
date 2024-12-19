@@ -110,18 +110,18 @@ TEST(DualTree, ExampleA) {
     EXPECT_THAT(t[4].get_comm_children(), IsEmpty());
 
     // start from the back at PE4
-    EXPECT_THAT(t[4].get_locally_computed(), ElementsAre(TC(10, 0)));
+    EXPECT_THAT(t[4].get_outgoing(), ElementsAre(TC(10, 0)));
 
-    EXPECT_THAT(t[3].get_locally_computed(), ElementsAre(TC(8, 1)));
+    EXPECT_THAT(t[3].get_outgoing(), ElementsAre(TC(8, 1)));
 
-    EXPECT_THAT(t[2].get_locally_computed(), ElementsAre(TC(7, 0))); // TC(8, 1) indirectly
+    EXPECT_THAT(t[2].get_outgoing(), ElementsAre(TC(7, 0), TC(8, 1)));
 
     EXPECT_FALSE(t[1].is_subtree_comm_local(4, 2));
     EXPECT_TRUE(t[1].is_subtree_comm_local(4, 1));
     EXPECT_TRUE(t[1].is_subtree_local(4, 1));
-    EXPECT_THAT(t[1].get_locally_computed(), ElementsAre(TC(3, 0), TC(4, 1), TC(6, 0)));
+    EXPECT_THAT(t[1].get_outgoing(), ElementsAre(TC(3, 0), TC(4, 1), TC(6, 0)));
 
-    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
+    EXPECT_THAT(t[0].get_outgoing(), ElementsAre(TC(0, 4)));
 }
 
 /**
@@ -135,7 +135,7 @@ TEST(DualTree, ExampleA) {
  *      │       │                   │
  *   PE0   PE1           PE2              PE3
  *    │     │             │                │
- *    │ 1,0 │2,0          │ 8,1            │
+ *    │ 1,0 │2,0          │ 8,2            │
  *    │◄────┘             │◄───────────────┘
  *    │3,0 4,2 8,1 10,0   │
  *    │◄──────────────────┘
@@ -153,15 +153,15 @@ TEST(DualTree, ExampleB) {
 
 
     const vector<TC> t3_out{{8, 2}};
-    EXPECT_THAT(t[3].get_locally_computed(), ElementsAreArray(t3_out));
+    EXPECT_THAT(t[3].get_outgoing(), ElementsAreArray(t3_out));
 
-    const vector<TC> t2_out{{3, 0}, {4, 2}}; // {8, 1}, {10, 0} indirectly
-    EXPECT_THAT(t[2].get_locally_computed(), ElementsAreArray(t2_out));
+    const vector<TC> t2_out{{3, 0}, {4, 2}, {8, 2}};
+    EXPECT_THAT(t[2].get_outgoing(), ElementsAreArray(t2_out));
 
     const vector<TC> t1_out{{1, 0}, {2, 0}};
-    EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
+    EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
 
-    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
+    EXPECT_THAT(t[0].get_outgoing(), ElementsAre(TC(0, 4)));
 }
 
 
@@ -202,16 +202,16 @@ TEST(DualTree, ExampleC) {
     const vector<TC> t5_out{{13, 0}};
     const vector<TC> t4_out{{11, 0}, {12, 2}};
     const vector<TC> t3_out{{9, 0}, {10, 0}};
-    const vector<TC> t2_out{{6, 1}, {8, 1}};
+    const vector<TC> t2_out{{6, 1}, {8, 1}, {10, 0}};
     const vector<TC> t1_out{{4, 1}};
 
-    EXPECT_THAT(t[6].get_locally_computed(), ElementsAreArray(t6_out));
-    EXPECT_THAT(t[5].get_locally_computed(), ElementsAreArray(t5_out));
-    EXPECT_THAT(t[4].get_locally_computed(), ElementsAreArray(t4_out));
-    EXPECT_THAT(t[3].get_locally_computed(), ElementsAreArray(t3_out));
-    EXPECT_THAT(t[2].get_locally_computed(), ElementsAreArray(t2_out));
-    EXPECT_THAT(t[1].get_locally_computed(), ElementsAreArray(t1_out));
-    EXPECT_THAT(t[0].get_locally_computed(), ElementsAre(TC(0, 4)));
+    EXPECT_THAT(t[6].get_outgoing(), ElementsAreArray(t6_out));
+    EXPECT_THAT(t[5].get_outgoing(), ElementsAreArray(t5_out));
+    EXPECT_THAT(t[4].get_outgoing(), ElementsAreArray(t4_out));
+    EXPECT_THAT(t[3].get_outgoing(), ElementsAreArray(t3_out));
+    EXPECT_THAT(t[2].get_outgoing(), ElementsAreArray(t2_out));
+    EXPECT_THAT(t[1].get_outgoing(), ElementsAreArray(t1_out));
+    EXPECT_THAT(t[0].get_outgoing(), ElementsAre(TC(0, 4)));
 }
 
 

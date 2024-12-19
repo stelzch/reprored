@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     ::testing::TestEventListeners &listeners = ::testing::UnitTest::GetInstance()->listeners();
     ::testing::TestEventListener *l = listeners.Release(listeners.default_result_printer());
     listeners.Append(new GTestMPIListener::MPIWrapperPrinter(l, MPI_COMM_WORLD));
-    listeners.Append(new DebugAttachListener());
+    // listeners.Append(new DebugAttachListener());
 
     attach_debugger_env();
     auto result = RUN_ALL_TESTS();

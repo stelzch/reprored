@@ -47,8 +47,7 @@ public:
 
 
     /// Get coordinates of intermediate results that are computed on this rank and sent out accordingly.
-    /// Does not include results that are just passed along in the communication tree.
-    const vector<TreeCoordinates> &get_locally_computed() const { return outgoing; }
+    const vector<TreeCoordinates> &get_outgoing() const { return outgoing; }
 
     const vector<int> &get_comm_children() const { return comm_children; }
 

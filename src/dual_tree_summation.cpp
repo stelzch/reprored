@@ -21,7 +21,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
     rank_order{compute_rank_order(regions)},
     inverse_rank_order{compute_inverse_rank_order(rank_order)},
     topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions)},
-    outgoing(topology.get_locally_computed()),
+    outgoing(topology.get_outgoing()),
     rank_of_comm_parent(
             rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.parent(rank_to_array_order(rank)))),
     is_root(rank_to_array_order(DualTreeSummation::rank) == 0) {
@@ -127,7 +127,7 @@ double DualTreeSummation::accumulate(void) {
 
 
     // 2. Compute local values
-    for (const auto &coords: topology.get_locally_computed()) {
+    for (const auto &coords: topology.get_outgoing()) {
         outbox[coords] = accumulate(coords.first, coords.second);
 #ifdef DEBUG_TRACE
         printf(" (%lu, %u) = %f  ", coords.first, coords.second, outbox[coords]);
