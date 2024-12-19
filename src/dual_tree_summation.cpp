@@ -55,14 +55,14 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
 
 
 #ifdef DEBUG_TRACE
-    printf("rank %i (permuted %i) region %zu-%zu incoming ", rank, rank_to_array_order(rank),
+    printf("rank %lu (permuted %i) region %zu-%zu incoming ", rank, rank_to_array_order(rank),
            regions[rank].globalStartIndex, regions[rank].globalStartIndex + regions[rank].size);
 
     for (const auto &e: incoming) {
 
-        printf("({} -> ", e.first);
+        printf("(%i -> ", e.first);
         for (const auto &v: e.second) {
-            printf("(%i,%i) ", e.first, e.second);
+            printf("(%lu,%i) ", v.first, v.second);
         }
         printf(") ");
     }
@@ -95,7 +95,7 @@ double DualTreeSummation::accumulate(void) {
         comm_buffer.resize(count);
 
 #ifdef DEBUG_TRACE
-        printf("rank %i receiving %lu elements to rank %i\n", rank, count, child_rank);
+        printf("rank %lu receiving %lu elements to rank %i\n", rank, count, child_rank);
 #endif
         MPI_Recv(comm_buffer.data(), count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
 
@@ -117,7 +117,7 @@ double DualTreeSummation::accumulate(void) {
             }
         }
     }
-    printf("rank %i computing ", rank);
+    printf("rank %lu computing ", rank);
 #endif
 
 

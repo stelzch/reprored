@@ -406,6 +406,14 @@ TEST(DualTree, DifficultDistributions) {
             DualTreeSummation dts(rank, regions, comm);
             memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
+            {
+                printf("rank %i local_arr = ", rank);
+                for (const auto &v : local_arr) {
+                    printf("%f ", v);
+                }
+                printf("\n");
+            }
+
             double result = dts.accumulate();
 
             EXPECT_EQ(single_rank_result, result);
