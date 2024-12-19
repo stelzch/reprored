@@ -323,10 +323,11 @@ TEST(DualTree, Fuzzer) {
                         memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
                         result = dts.accumulate();
+                        EXPECT_EQ(result, reference_result)
+                                << "Expected result to be the same as with p=1 " << reference_result
+                                << " but new_result is " << result << ", difference is " << (reference_result - result)
+                                << " on rank " << rank;
                     });
-            if (full_comm_rank < ranks) {
-                EXPECT_EQ(result, reference_result);
-            }
             ++checks;
         }
     }
@@ -346,6 +347,7 @@ TEST(DualTree, DifficultDistributions) {
 
 
     vector<vector<region>> test_distributions{
+            {{0, 63}, {81, 13}, {63, 15}, {80, 1}, {78, 2}, {94, 13}},
             {{16, 17}, {13, 2}, {15, 1}, {4, 1}, {5, 8}, {0, 4}, {33, 3}, {36, 2}},
             {{99, 73}, {0, 42}, {172, 16}, {42, 57}},
             {{86, 15}, {45, 14}, {0, 43}, {101, 72}, {43, 2}, {59, 27}},
