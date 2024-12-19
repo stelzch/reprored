@@ -8,11 +8,6 @@
 #include "binary_tree_summation.h"
 
 
-#ifdef DEBUG_TRACE
-#include <format>
-auto print_tuple(const TreeCoordinates &rhs) { return std::format("({}, {})", rhs.first, rhs.second); }
-#endif
-
 DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &regions_, MPI_Comm comm) :
     comm{comm},
     comm_size(regions_.size()),
@@ -60,22 +55,22 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
 
 
 #ifdef DEBUG_TRACE
-    std::cout << std::format("rank {} (permuted {}) region {}-{} incoming ", rank, rank_to_array_order(rank),
-                             regions[rank].globalStartIndex, regions[rank].globalStartIndex + regions[rank].size);
+    printf("rank %i (permuted %i) region %zu-%zu incoming ", rank, rank_to_array_order(rank),
+           regions[rank].globalStartIndex, regions[rank].globalStartIndex + regions[rank].size);
 
     for (const auto &e: incoming) {
 
-        std::cout << std::format("({} -> ", e.first);
+        printf("({} -> ", e.first);
         for (const auto &v: e.second) {
-            std::cout << print_tuple(v) << " ";
+            printf("(%i,%i) ", e.first, e.second);
         }
-        std::cout << ") ";
+        printf(") ");
     }
-    std::cout << " outgoing ";
+    printf(" outgoing ");
     for (const auto &v: outgoing) {
-        std::cout << print_tuple(v) << " ";
+        printf("(%zu, %u)", v.first, v.second);
     }
-    std::cout << std::endl;
+    printf("\n");
 
     assert(rank_to_array_order(rank) != 0 || is_root);
 #endif
@@ -100,7 +95,7 @@ double DualTreeSummation::accumulate(void) {
         comm_buffer.resize(count);
 
 #ifdef DEBUG_TRACE
-        std::cout << std::format("rank {} receiving {} elements to rank {}\n", rank, count, child_rank);
+        printf("rank %i receiving %lu elements to rank %i\n", rank, count, child_rank);
 #endif
         MPI_Recv(comm_buffer.data(), count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
 
@@ -117,7 +112,7 @@ double DualTreeSummation::accumulate(void) {
     for (const auto &[other_rank, coords]: incoming) {
         for (const auto &coord: coords) {
             if (!(inbox.contains(coord) || outbox.contains(coord))) {
-                fprintf(stderr, "rank %i expected to receive (%lu, %lu) from rank %i, but it was not delivered\n", rank,
+                fprintf(stderr, "rank %lu expected to receive (%lu, %u) from rank %i, but it was not delivered\n", rank,
                         coord.first, coord.second, other_rank);
             }
         }
@@ -148,8 +143,7 @@ double DualTreeSummation::accumulate(void) {
             comm_buffer[i] = outbox.at(key);
         }
 #ifdef DEBUG_TRACE
-        std::cout << std::format("rank {} sending {} elements to rank {}\n", rank, outgoing.size(),
-                                 rank_of_comm_parent);
+        printf("rank %lu sending %lu elements to rank %i\n", rank, outgoing.size(), rank_of_comm_parent);
 #endif
         MPI_Send(comm_buffer.data(), outgoing.size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
     }
@@ -212,7 +206,7 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
 
 double DualTreeSummation::accumulate(uint64_t x, uint32_t y) {
 #ifdef DEBUG_VERBOSE
-    std::cout << std::format("rank {} reducing ({}, {})\n", rank, x, y);
+    printf("rank %i reducing (%zu, %u)\n", rank, x, y);
 #endif
 
     if (const auto e = inbox.find(TreeCoordinates(x, y)); e != inbox.end()) {
