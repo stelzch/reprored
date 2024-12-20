@@ -348,7 +348,6 @@ TEST(DualTree, DifficultDistributions) {
 
     vector<vector<region>> test_distributions{
             {{0, 63}, {81, 13}, {63, 15}, {80, 1}, {78, 2}, {94, 13}},
-            {{0, 63}, {81, 13}, {63, 15}, {80, 1}, {78, 2}, {94, 13}},
             {{16, 17}, {13, 2}, {15, 1}, {4, 1}, {5, 8}, {0, 4}, {33, 3}, {36, 2}},
             {{99, 73}, {0, 42}, {172, 16}, {42, 57}},
             {{86, 15}, {45, 14}, {0, 43}, {101, 72}, {43, 2}, {59, 27}},
@@ -371,6 +370,14 @@ TEST(DualTree, DifficultDistributions) {
 
         vector<double> v = generate_test_vector(global_array_length, 4);
 
+        if (rank == 0) {
+            printf("rank %i v = ", rank);
+            for (const auto &val: v) {
+                printf("%f ", val);
+            }
+            printf("\n");
+        }
+
         double reference = std::accumulate(v.begin(), v.end(), 0.0);
 
         double reference_xor = 1;
@@ -380,45 +387,81 @@ TEST(DualTree, DifficultDistributions) {
 
         double single_rank_result = 0.0;
 
-        with_comm_size_n(full_comm, 1, [global_array_length, &v, &single_rank_result](auto comm, auto rank, auto size)  {
-            const vector<region> single_region = {{0, global_array_length}};
-            const auto distribution = distribute_evenly(v.size(), 1);
-            const auto single_region_ii = regions_from_distribution(distribution);
-            DualTreeSummation dts(0, single_region_ii, comm);
-            memcpy(dts.getBuffer(), v.data(), v.size() * sizeof(double));
+        {
+            MPI_Comm new_comm;
+            MPI_Comm_split(MPI_COMM_WORLD, rank == 0 ? 0 : 1, rank, &new_comm);
 
-            single_rank_result = dts.accumulate();
-        });
+            if (rank == 0) {
+                Distribution single_d(1);
+                single_d.displs[0] = 0;
+                single_d.send_counts[0] = global_array_length;
+
+                const auto single_region_ii = regions_from_distribution(single_d);
+                DualTreeSummation dts(0, single_region_ii, new_comm);
+                memcpy(dts.getBuffer(), v.data(), v.size() * sizeof(double));
+
+                single_rank_result = dts.accumulate();
+                printf("rank 0 single rank result=%f\n", single_rank_result);
+            }
+
+            MPI_Comm_free(&new_comm);
+        }
 
         MPI_Bcast(&single_rank_result, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-        with_comm_size_n(full_comm, regions.size(), [regions, single_rank_result, reference, &v](auto comm, auto rank, auto size) {
-            ASSERT_NEAR(single_rank_result, reference, 1e-3);
-            Distribution d(size);
+        {
+            MPI_Comm new_comm;
+            MPI_Comm_split(MPI_COMM_WORLD, rank < regions.size() ? 0 : 1, rank, &new_comm);
 
-            // Convert regions to distribution
-            for (auto i = 0U; i < size; ++i) {
-                d.displs[i] = static_cast<int>(regions[i].globalStartIndex);
-                d.send_counts[i] = static_cast<int>(regions[i].size);
-            }
+            if (rank < regions.size()) {
 
-            auto local_arr = scatter_array(comm, v, d);
-            DualTreeSummation dts(rank, regions, comm);
-            memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                ASSERT_NEAR(single_rank_result, reference, 1e-3);
+                Distribution d(regions.size());
 
-            {
-                printf("rank %i local_arr = ", rank);
-                for (const auto &v : local_arr) {
-                    printf("%f ", v);
+                // Convert regions to distribution
+                for (auto i = 0U; i < regions.size(); ++i) {
+                    if (i < regions.size()) {
+                        d.displs[i] = static_cast<int>(regions.at(i).globalStartIndex);
+                        d.send_counts[i] = static_cast<int>(regions.at(i).size);
+                    } else {
+                        d.displs[i] = global_array_length + 10;
+                        d.send_counts[i] = 0;
+                    }
                 }
-                printf("\n");
+
+                auto local_arr = scatter_array(new_comm, v, d);
+                EXPECT_EQ(local_arr.size(), d.send_counts.at(rank));
+
+                for (auto i = 0U; i < d.send_counts[rank]; ++i) {
+                    EXPECT_EQ(local_arr.at(i), v.at(i + d.displs.at(rank)));
+                }
+
+                DualTreeSummation dts(rank, regions, new_comm);
+                memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+
+
+                {
+                    printf("rank %i local_arr = ", rank);
+                    for (const auto &v : local_arr) {
+                        printf("%f ", v);
+                    }
+                    printf("\n");
+
+                    printf("rank %i regions = {", rank);
+                    for (auto i = 0; i < regions.size(); ++i) {
+                        printf("{%lu, %lu}, ", regions[i].globalStartIndex, regions[i].size);
+                    }
+                    printf("}");
+                }
+
+                double result = dts.accumulate();
+
+                EXPECT_EQ(single_rank_result, result);
+                EXPECT_NEAR(reference, result, 1e-9);
+                printf("rank %i done\n", rank);
             }
-
-            double result = dts.accumulate();
-
-            EXPECT_EQ(single_rank_result, result);
-            EXPECT_NEAR(reference, result, 1e-9);
-        });
+            MPI_Comm_free(&new_comm);
+        }
     }
 }
 
