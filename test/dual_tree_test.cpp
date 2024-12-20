@@ -269,19 +269,22 @@ TEST(DualTree, Fuzzer) {
         double reference_result = 0;
 
         // Calculate reference result
-        with_comm_size_n(comm, 1, [&reference_result, &data_array, &comm](auto comm_, auto rank, auto comm_size_) {
-            ASSERT_EQ(rank, 0);
-            ASSERT_EQ(comm_size_, 1);
-            const auto distribution = distribute_evenly(data_array.size(), 1);
-            DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
-            memcpy(dts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
+        {
+            MPI_Comm new_comm;
+            MPI_Comm_split(comm, full_comm_rank == 0 ? 0 : 1, full_comm_rank, &new_comm);
+            if (full_comm_rank == 0) {
+                const auto distribution = distribute_evenly(data_array.size(), 1);
+                DualTreeSummation dts(full_comm_rank, regions_from_distribution(distribution), new_comm);
+                memcpy(dts.getBuffer(), data_array.data(), data_array.size() * sizeof(double));
 
-            reference_result = dts.accumulate();
-            const auto std_accumulate_result = std::accumulate(data_array.begin(), data_array.end(), 0.0);
+                reference_result = dts.accumulate();
+                const auto std_accumulate_result = std::accumulate(data_array.begin(), data_array.end(), 0.0);
 
-            // Sanity check
-            ASSERT_NEAR(reference_result, std_accumulate_result, 1e-9);
-        });
+                // Sanity check
+                ASSERT_NEAR(reference_result, std_accumulate_result, 1e-9);
+            }
+            MPI_Comm_free(&new_comm);
+        }
 
         MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
@@ -302,32 +305,36 @@ TEST(DualTree, Fuzzer) {
                 printf("}\n");
             }
 
-            double result;
-            with_comm_size_n(
-                    comm, ranks,
-                    [&distribution, &data_array, &ranks, &reference_result, &result](auto comm_, auto rank, auto size) {
-                        MPI_Barrier(comm_);
-                        int comm_size;
-                        MPI_Comm_size(comm_, &comm_size);
-                        ASSERT_EQ(static_cast<int>(ranks), comm_size);
-                        ASSERT_EQ(distribution.displs.size(), comm_size);
-                        ASSERT_EQ(distribution.send_counts.size(), comm_size);
+            {
+                MPI_Comm new_comm;
+                MPI_Comm_split(comm, full_comm_rank < distribution.displs.size() ? 0 : 1, full_comm_rank, &new_comm);
 
-                        DualTreeSummation dts(rank, regions_from_distribution(distribution), comm_);
 
-                        std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
-                        if (local_arr.size() > dts.getBufferSize()) {
-                            attach_debugger(true);
-                        }
-                        EXPECT_LE(local_arr.size(), dts.getBufferSize());
-                        memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                if (full_comm_rank < distribution.displs.size()) {
+                    int comm_size;
+                    MPI_Comm_size(new_comm, &comm_size);
+                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                    ASSERT_EQ(distribution.displs.size(), comm_size);
+                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                        result = dts.accumulate();
-                        EXPECT_EQ(result, reference_result)
-                                << "Expected result to be the same as with p=1 " << reference_result
-                                << " but new_result is " << result << ", difference is " << (reference_result - result)
-                                << " on rank " << rank;
-                    });
+                    DualTreeSummation dts(full_comm_rank, regions_from_distribution(distribution), new_comm);
+
+                    std::vector<double> local_arr = scatter_array(new_comm, data_array, distribution);
+                    if (local_arr.size() > dts.getBufferSize()) {
+                        attach_debugger(true);
+                    }
+                    EXPECT_LE(local_arr.size(), dts.getBufferSize());
+                    memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+
+                    double result = dts.accumulate();
+                    EXPECT_EQ(result, reference_result)
+                            << "Expected result to be the same as with p=1 " << reference_result
+                            << " but new_result is " << result << ", difference is " << (reference_result - result)
+                            << " on rank " << full_comm_rank;
+                }
+
+                MPI_Comm_free(&new_comm);
+            }
             ++checks;
         }
     }
