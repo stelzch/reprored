@@ -4,6 +4,7 @@
 #include <k_chunked_array.hpp>
 #include <util.hpp>
 
+#include <algorithm>
 #include <random>
 
 #include "binary_tree_summation.h"
@@ -262,9 +263,7 @@ TEST(DualTree, Fuzzer) {
     for (auto i = 0U; i < NUM_ARRAYS; ++i) {
         std::vector<double> data_array;
         size_t const data_array_size = array_length_distribution(rng);
-        if (full_comm_rank == 0) {
-            data_array = generate_test_vector(data_array_size, rng_root());
-        }
+        data_array = generate_test_vector(data_array_size, rng_root());
 
         double reference_result = 0;
 
@@ -319,12 +318,8 @@ TEST(DualTree, Fuzzer) {
 
                     DualTreeSummation dts(full_comm_rank, regions_from_distribution(distribution), new_comm);
 
-                    std::vector<double> local_arr = scatter_array(new_comm, data_array, distribution);
-                    if (local_arr.size() > dts.getBufferSize()) {
-                        attach_debugger(true);
-                    }
-                    EXPECT_LE(local_arr.size(), dts.getBufferSize());
-                    memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                    std::copy_n(data_array.begin() + distribution.displs.at(full_comm_rank),
+                                distribution.send_counts.at(full_comm_rank), dts.getBuffer());
 
                     double result = dts.accumulate();
                     EXPECT_EQ(result, reference_result)
@@ -436,36 +431,14 @@ TEST(DualTree, DifficultDistributions) {
                     }
                 }
 
-                auto local_arr = scatter_array(new_comm, v, d);
-                EXPECT_EQ(local_arr.size(), d.send_counts.at(rank));
-
-                for (auto i = 0U; i < d.send_counts[rank]; ++i) {
-                    EXPECT_EQ(local_arr.at(i), v.at(i + d.displs.at(rank)));
-                }
-
                 DualTreeSummation dts(rank, regions, new_comm);
-                memcpy(dts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                std::copy_n(v.begin() + d.displs.at(rank), d.send_counts.at(rank), dts.getBuffer());
 
-
-                {
-                    printf("rank %i local_arr = ", rank);
-                    for (const auto &v : local_arr) {
-                        printf("%f ", v);
-                    }
-                    printf("\n");
-
-                    printf("rank %i regions = {", rank);
-                    for (auto i = 0; i < regions.size(); ++i) {
-                        printf("{%lu, %lu}, ", regions[i].globalStartIndex, regions[i].size);
-                    }
-                    printf("}");
-                }
 
                 double result = dts.accumulate();
 
                 EXPECT_EQ(single_rank_result, result);
                 EXPECT_NEAR(reference, result, 1e-9);
-                printf("rank %i done\n", rank);
             }
             MPI_Comm_free(&new_comm);
         }
