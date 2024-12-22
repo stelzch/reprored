@@ -1,9 +1,11 @@
 #include <vector>
+#include <unordered_map>
 #include "binary_tree.hpp"
 #include "dual_tree_topology.hpp"
 #include "summation.hpp"
 
 using std::vector;
+using std::unordered_map;
 
 // https://xkcd.com/221
 constexpr int OUTGOING_SIZE_MSG_TAG = 20232;
@@ -97,12 +99,12 @@ private:
     const vector<int> inverse_rank_order; // maps PE rank -> array order
 
     const DualTreeTopology topology;
-    map<int, vector<TreeCoordinates>> incoming; // map unpermuted rank -> list of sent values
+    unordered_map<int, vector<TreeCoordinates>> incoming; // map unpermuted rank -> list of sent values
     vector<TreeCoordinates> outgoing;
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
-    map<TreeCoordinates, double> inbox;
-    map<TreeCoordinates, double> outbox;
+    unordered_map<TreeCoordinates, double> inbox;
+    unordered_map<TreeCoordinates, double> outbox;
     vector<double> comm_buffer;
     long int acquisition_count;
 

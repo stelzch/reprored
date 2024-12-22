@@ -13,6 +13,16 @@ using std::vector;
 
 using TreeCoordinates = pair<uint64_t, uint32_t>; // x and y coordinate
 
+
+template<>
+struct std::hash<TreeCoordinates>
+{
+    std::size_t operator()(const TreeCoordinates& k) const
+    {
+        return k.first ^ static_cast<uint64_t>(k.second);
+    }
+};
+
 class DualTreeTopology {
 public:
     /**
