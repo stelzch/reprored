@@ -1,16 +1,20 @@
-#include <vector>
 #include <unordered_map>
+#include <vector>
 #include "binary_tree.hpp"
 #include "dual_tree_topology.hpp"
 #include "summation.hpp"
 
-using std::vector;
+#include <set>
+
 using std::unordered_map;
 
 // https://xkcd.com/221
 constexpr int OUTGOING_SIZE_MSG_TAG = 20232;
 constexpr int OUTGOING_MSG_TAG = 20233;
 constexpr int TRANSFER_MSG_TAG = 20234;
+
+typedef int64_t operation; // 0 == reduce, i > 0 --> push element i onto working stack
+constexpr int64_t OPERATION_REDUCE = -1;
 
 class DualTreeSummation : public Summation {
 public:
@@ -26,6 +30,10 @@ public:
      */
     double accumulate(void) override;
     double local_accumulate(uint64_t x, uint32_t y);
+    void execute_operations();
+    void local_accumulate();
+    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<int64_t> &ops,
+                            vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
 
     using TreeCoordinates = std::pair<uint64_t, uint32_t>;
 
@@ -100,10 +108,14 @@ private:
 
     const DualTreeTopology topology;
     unordered_map<int, vector<TreeCoordinates>> incoming; // map unpermuted rank -> list of sent values
+    std::set<TreeCoordinates> incoming_coordinates;
+    vector<operation> operations;
+    vector<TreeCoordinates> local_compute_coords; // Coords of subtrees that are fully local to this rank
     vector<TreeCoordinates> outgoing;
+    vector<double> stack;
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
-    unordered_map<TreeCoordinates, double> inbox;
+    unordered_map<uint64_t, double> inbox;
     unordered_map<TreeCoordinates, double> outbox;
     vector<double> comm_buffer;
     long int acquisition_count;
