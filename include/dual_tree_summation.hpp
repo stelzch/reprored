@@ -17,6 +17,19 @@ typedef bool operation;
 constexpr auto OPERATION_PUSH = true;
 constexpr auto OPERATION_REDUCE = false;
 
+/**
+ * Reproducible summation using two binary trees: a reduction tree that defines the order of computation and a
+ * communication tree that defines the direction of communication. Each rank receives intermediate results from its
+ * child nodes in the communication tree, reduces them as much as possible together with the "local" array values and
+ * sends them out to the communication tree parent.
+ *
+ * Figuring out which of the received values can be used with local computations and which must be passed on is
+ * non-trivial. To avoid large overhead during the reduction, we use a precomputed set of operations on a stack.
+ * The #inbox vector stores the reduction results of the local elements alongside the intermediate results received from
+ * other ranks. Because these are stored in the same order as they are consumed, we do not need to keep track of the
+ * exact coordinates. The operations then encode when to push a value from the inbox onto the stack and when to reduce
+ * the two topmost values.
+ */
 class DualTreeSummation : public Summation {
 public:
     DualTreeSummation(uint64_t rank, const vector<region> &regions, MPI_Comm comm = MPI_COMM_WORLD);
@@ -30,16 +43,19 @@ public:
     /* Sum all numbers. Will return the total sum on rank 0
      */
     double accumulate(void) override;
-    double local_accumulate(uint64_t x, uint32_t y);
-    void execute_operations();
-    void local_accumulate();
-    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<operation> &ops,
-                            vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
 
     using TreeCoordinates = std::pair<uint64_t, uint32_t>;
 
 
 private:
+    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<operation> &ops,
+                            vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
+    double local_accumulate(uint64_t x, uint32_t y);
+    void local_accumulate_into_inbox();
+    void execute_operations();
+    void receive_values_into_inbox();
+    double broadcast_result();
+    void send_outgoing_values();
     inline auto array_to_rank_order(const int rank) const { return rank_order[rank]; }
     inline auto rank_to_array_order(const int rank) const { return inverse_rank_order[rank]; }
     double accumulate(uint64_t x, uint32_t y);
@@ -86,39 +102,38 @@ private:
      * are on rank 0, the next on rank 1 and so on) This might not necessarily be true (e.g. RAxML-NG can assign the
      * last elements to rank 0). To keep track, we keep this permutation which maps our MPI rank to the ordering of the
      * global array.
-     *                          ┌─────────────┐┌──────┐┌────────────┐
-     *          ordered by rank │     PE0     ││  PE1 ││    PE2     │
-     *                          └──────┬──────┘└───┬──┘└──────┬─────┘
-     *           displacement   12     │       25  │    0     │
-     *                                 │           │          │
-     *                                ┌┼───────────┼──────────┘
-     *                                ││           └────────────┐
-     *                                │└────────────┐           │
-     *                                │             │           │
-     *                          ┌─────▼──────┐┌─────▼───────┐┌──▼───┐
-     *   ordered by array index │     PE2    ││      PE0    ││ PE1  │
-     *                          └────────────┘└─────────────┘└──────┘
-     *                          0             12             25
+     *
+     *                              ┌─────────────┐┌──────┐┌────────────┐
+     *              ordered by rank │     PE0     ││  PE1 ││    PE2     │
+     *                              └──────┬──────┘└───┬──┘└──────┬─────┘
+     *               displacement   12     │       25  │    0     │
+     *                                     │           │          │
+     *                                    ┌┼───────────┼──────────┘
+     *                                    ││           └────────────┐
+     *                                    │└────────────┐           │
+     *                                    │             │           │
+     *                              ┌─────▼──────┐┌─────▼───────┐┌──▼───┐
+     *       ordered by array index │     PE2    ││      PE0    ││ PE1  │
+     *                              └────────────┘└─────────────┘└──────┘
+     *                              0             12             25
      *
      * In this example, rank_order = (2, 0, 1) and inverse_rank_order = (1, 2, 0)
      * rank_order maps from array order to PE rank
      * inverse_rank_order maps from PE rank to array order
      */
-    const vector<int> rank_order; // maps array order -> PE rank
-    const vector<int> inverse_rank_order; // maps PE rank -> array order
+    const vector<int> rank_order; ///< maps array order -> PE rank
+    const vector<int> inverse_rank_order; ///< maps PE rank -> array order
 
     const DualTreeTopology topology;
-    vector<uint64_t> incoming_element_count; // Number of elements received from each child rank
+    vector<uint64_t> incoming_element_count; ///< Number of elements received from each child rank.
     vector<operation> operations;
-    vector<TreeCoordinates> local_compute_coords; // Coords of subtrees that are fully local to this rank
-    vector<TreeCoordinates> outgoing; // Coords we send out to other ranks
-    vector<double> stack;
+    vector<TreeCoordinates> local_compute_coords; ///< Coords of subtrees that are fully local to this rank
+    vector<TreeCoordinates> outgoing; ///< Coords we send out to other ranks
+    vector<double> stack; ///< Stack for intermediate values during computations
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
-    vector<double> inbox; // Storage of incoming elements
-    long int acquisition_count;
+    vector<double> inbox; ///< Storage of incoming elements
 
-    uint64_t reduction_counter;
     const int rank_of_comm_parent;
     const bool is_root;
 };
