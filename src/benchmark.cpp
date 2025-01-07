@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
 #ifdef SCOREP
     SCOREP_USER_REGION_DEFINE(region_benchmark_loop);
     SCOREP_USER_REGION_DEFINE(region_bts);
+    SCOREP_USER_REGION_DEFINE(region_dts);
     SCOREP_USER_REGION_DEFINE(region_kgather);
     SCOREP_USER_REGION_DEFINE(region_allreduce);
     SCOREP_USER_REGION_DEFINE(region_reproblas);
@@ -199,6 +200,9 @@ int main(int argc, char **argv) {
         }
 
         {
+#ifdef SCOREP
+            SCOREP_USER_REGION_BEGIN(region_dts, "dualtreesummation", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
             DualTreeSummation dual_tree_summation(rank, regions, comm);
 
             const auto results = measure(
@@ -213,6 +217,11 @@ int main(int argc, char **argv) {
                     print_result(config, result, "dts");
                 }
             }
+
+
+#ifdef SCOREP
+            SCOREP_USER_REGION_END(region_dts);
+#endif
         }
 
         if (config.k > 1 && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
