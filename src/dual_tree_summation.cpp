@@ -7,6 +7,10 @@
 
 #include "binary_tree_summation.h"
 
+#ifdef SCOREP
+#include <scorep/SCOREP_User.h>
+#endif
+
 
 DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &regions_, MPI_Comm comm) :
     comm{comm},
@@ -85,11 +89,30 @@ uint64_t DualTreeSummation::getBufferSize() { return accumulation_buffer.size();
 void DualTreeSummation::storeSummand(uint64_t localIndex, double val) { accumulation_buffer[localIndex] = val; }
 
 double DualTreeSummation::accumulate(void) {
+#ifdef SCOREP
+    SCOREP_USER_REGION_DEFINE(region_receive);
+    SCOREP_USER_REGION_DEFINE(region_receive_from_rank);
+    SCOREP_USER_REGION_DEFINE(region_compute);
+    SCOREP_USER_REGION_DEFINE(region_compute_index);
+    SCOREP_USER_REGION_DEFINE(region_send);
+    SCOREP_USER_REGION_DEFINE(region_broadcast);
+
+#endif
+
     outbox.clear();
     inbox.clear();
 
+
+#ifdef SCOREP
+    SCOREP_USER_REGION_BEGIN(region_receive, "receive", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
     // 1. Receive all values from child nodes
     for (auto permuted_child_rank: topology.get_comm_children()) {
+#ifdef SCOREP
+        SCOREP_USER_REGION_BEGIN(region_receive_from_rank, "receive from rank", SCOREP_USER_REGION_TYPE_COMMON);
+        SCOREP_USER_PARAMETER_INT64("src_rank", permuted_child_rank);
+
+#endif
         const auto child_rank = array_to_rank_order(permuted_child_rank);
         uint64_t count = incoming[child_rank].size();
         comm_buffer.resize(count);
@@ -106,7 +129,15 @@ double DualTreeSummation::accumulate(void) {
 
             inbox[key] = value;
         }
+
+#ifdef SCOREP
+        SCOREP_USER_REGION_END(region_receive_from_rank);
+#endif
     }
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_receive);
+    SCOREP_USER_REGION_BEGIN(region_compute, "compute", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
 
 #ifdef DEBUG_TRACE
     for (const auto &[other_rank, coords]: incoming) {
@@ -120,10 +151,26 @@ double DualTreeSummation::accumulate(void) {
     printf("rank %lu computing ", rank);
 #endif
 
-
     // 2. Compute local values
     for (const auto &coords: topology.get_outgoing()) {
+#ifdef SCOREP
+
+        SCOREP_USER_REGION_BEGIN(region_compute_index, "compute index", SCOREP_USER_REGION_TYPE_COMMON);
+        SCOREP_USER_PARAMETER_UINT64("x", coords.first);
+        SCOREP_USER_PARAMETER_UINT64("y", coords.second);
+
+        const auto max_x = std::min(topology.largest_child_index(coords.first), topology.get_global_size());
+        const auto local_elements =
+                (topology.get_local_end_index() <= coords.first) ? 0 : max_x - topology.get_local_start_index();
+        SCOREP_USER_PARAMETER_UINT64("element_count", max_x - coords.first);
+        SCOREP_USER_PARAMETER_UINT64("local_elements", local_elements);
+#endif
         outbox[coords] = accumulate(coords.first, coords.second);
+
+
+#ifdef SCOREP
+        SCOREP_USER_REGION_END(region_compute_index);
+#endif
 #ifdef DEBUG_TRACE
         printf(" (%lu, %u) = %f  ", coords.first, coords.second, outbox[coords]);
 
@@ -134,6 +181,11 @@ double DualTreeSummation::accumulate(void) {
 #endif
 
     assert(rank_to_array_order(rank) != 0 || is_root);
+
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_compute);
+    SCOREP_USER_REGION_BEGIN(region_send, "send", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
 
     // 3. Send out computed values
     if (!is_root) {
@@ -148,6 +200,12 @@ double DualTreeSummation::accumulate(void) {
         MPI_Send(comm_buffer.data(), outgoing.size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
     }
 
+
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_send);
+    SCOREP_USER_REGION_BEGIN(region_broadcast, "broadcast", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+
     // 4. Broadcast global value
     double result;
     if (is_root) {
@@ -156,6 +214,11 @@ double DualTreeSummation::accumulate(void) {
     }
 
     MPI_Bcast(&result, 1, MPI_DOUBLE, array_to_rank_order(0), comm);
+
+#ifdef SCOREP
+    SCOREP_USER_REGION_END(region_broadcast);
+
+#endif
 
     return result;
 }

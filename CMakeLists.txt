@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 
+if (USE_SCOREP)
+    set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
+    message("Using SCOREP, ${CMAKE_C_COMPILER}")
+endif ()
+
 project(BinaryTreeSummation)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -16,10 +21,6 @@ option(ENABLE_LTO "Enable link-time-optimizations" OFF)
 option(BUILD_BENCHMARK "Build benchmark executable" ON)
 option(BUILD_TESTS "Build unit tests" ON)
 
-if (USE_SCOREP)
-    set(CMAKE_C_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
-    set(CMAKE_CXX_COMPILER ${CMAKE_CURRENT_SOURCE_DIR}/contrib/scorep_compiler.sh)
-endif ()
 
 list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/message_buffer.cpp src/reproblas_summation.cpp src/kgather_summation.cpp src/util.cpp src/allreduce_summation.cpp src/dual_tree_summation.cpp src/summation.cpp)
 
@@ -31,7 +32,7 @@ target_sources(binarytreesummation
         PRIVATE ${WRAPPER_SRC}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic)
+target_compile_options(binarytreesummation PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic $<$<CONFIG:DEBUG>:-fsanitize=undefined>)
 target_link_libraries(binarytreesummation PUBLIC -ltbb)
 
 target_compile_definitions(binarytreesummation PRIVATE $<$<CONFIG:DEBUG>:DEBUG_TRACE>)
