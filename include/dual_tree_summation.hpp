@@ -13,8 +13,9 @@ constexpr int OUTGOING_SIZE_MSG_TAG = 20232;
 constexpr int OUTGOING_MSG_TAG = 20233;
 constexpr int TRANSFER_MSG_TAG = 20234;
 
-typedef int64_t operation; // 0 == reduce, i > 0 --> push element i onto working stack
-constexpr int64_t OPERATION_REDUCE = -1;
+typedef bool operation;
+constexpr auto OPERATION_PUSH = true;
+constexpr auto OPERATION_REDUCE = false;
 
 class DualTreeSummation : public Summation {
 public:
@@ -32,7 +33,7 @@ public:
     double local_accumulate(uint64_t x, uint32_t y);
     void execute_operations();
     void local_accumulate();
-    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<int64_t> &ops,
+    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<operation> &ops,
                             vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
 
     using TreeCoordinates = std::pair<uint64_t, uint32_t>;
@@ -107,17 +108,14 @@ private:
     const vector<int> inverse_rank_order; // maps PE rank -> array order
 
     const DualTreeTopology topology;
-    unordered_map<int, vector<TreeCoordinates>> incoming; // map unpermuted rank -> list of sent values
-    std::set<TreeCoordinates> incoming_coordinates;
+    vector<uint64_t> incoming_element_count; // Number of elements received from each child rank
     vector<operation> operations;
     vector<TreeCoordinates> local_compute_coords; // Coords of subtrees that are fully local to this rank
-    vector<TreeCoordinates> outgoing;
+    vector<TreeCoordinates> outgoing; // Coords we send out to other ranks
     vector<double> stack;
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;
-    unordered_map<uint64_t, double> inbox;
-    unordered_map<TreeCoordinates, double> outbox;
-    vector<double> comm_buffer;
+    vector<double> inbox; // Storage of incoming elements
     long int acquisition_count;
 
     uint64_t reduction_counter;
