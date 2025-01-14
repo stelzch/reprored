@@ -74,7 +74,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &region
         for (const auto op: operations) {
             if (op == OPERATION_REDUCE) {
                 assert(stack_size >= 2);
-                stack_size -= 2;
+                --stack_size;
             } else {
                 ++stack_size;
             }
