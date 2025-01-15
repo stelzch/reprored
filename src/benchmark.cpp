@@ -63,6 +63,7 @@ vector<BenchmarkIteration> measure(F prepare, G run, uint64_t repetitions) {
         prepare();
         Timer t;
         double result = run();
+        DoNotOptimize(result);
         const auto duration = t.stop();
 
         results[i].duration = duration;

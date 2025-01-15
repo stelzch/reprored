@@ -155,3 +155,8 @@ void with_comm_size_n(MPI_Comm &comm, size_t comm_size, F f) {
 
     MPI_Comm_free(&new_comm);
 }
+
+template<class Tp>
+inline void DoNotOptimize(Tp &value) {
+    asm volatile("" : "+m"(value) : : "memory");
+}
