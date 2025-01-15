@@ -249,23 +249,47 @@ int main(int argc, char **argv) {
         }
 
         {
-            {
-                AllreduceSummation ars(comm, regions[rank].size);
+            AllreduceSummation ars(comm, regions[rank].size, AllreduceType::REDUCE_AND_BCAST);
 
-                memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+            memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 #ifdef SCOREP
-                SCOREP_USER_REGION_BEGIN(region_allreduce, "allreduce", SCOREP_USER_REGION_TYPE_COMMON);
+            SCOREP_USER_REGION_BEGIN(region_allreduce, "allreduce", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
 
-                const auto results = measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
+            const auto results = measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
 
 #ifdef SCOREP
-                SCOREP_USER_REGION_END(region_allreduce);
+            SCOREP_USER_REGION_END(region_allreduce);
 #endif
-                if (rank == 0) {
-                    for (const auto &result: results) {
-                        print_result(config, result, "allreduce");
-                    }
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "reduce_bcast");
+                }
+            }
+        }
+        {
+            AllreduceSummation ars(comm, regions[rank].size, AllreduceType::ALLREDUCE);
+
+            memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+
+            const auto results = measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
+
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "allreduce");
+                }
+            }
+        }
+        {
+            AllreduceSummation ars(comm, regions[rank].size, AllreduceType::VECTORIZED_ALLREDUCE);
+
+            memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+
+            const auto results = measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
+
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "vectorized_allreduce");
                 }
             }
         }
