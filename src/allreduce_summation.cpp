@@ -23,7 +23,7 @@ double AllreduceSummation::accumulate() {
             MPI_Bcast(&sum, 1, MPI_DOUBLE, 0, comm);
             break;
         case AllreduceType::ALLREDUCE:
-            local_sum = std::reduce(std::execution::par_unseq, buffer.begin(), buffer.end(), 0.0, std::plus<double>());
+            local_sum = std::reduce(buffer.begin(), buffer.end(), 0.0, std::plus<double>());
 
             MPI_Allreduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, comm);
             break;
