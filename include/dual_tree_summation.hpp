@@ -48,6 +48,9 @@ public:
 
 
 private:
+    void receive_incoming_coordinates(MPI_Comm comm, std::set<std::pair<uint64_t, uint32_t>> &incoming_coordinates);
+    void send_outgoing_coordinates(MPI_Comm comm) const;
+    unsigned long compute_maximum_stack_size() const;
     void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<operation> &ops,
                             vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
     double local_accumulate(uint64_t x, uint32_t y);

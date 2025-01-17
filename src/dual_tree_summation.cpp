@@ -36,8 +36,40 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
     assert(std::is_sorted(topology.get_comm_children().begin(), topology.get_comm_children().end()));
 
     // Determine incoming + outgoing values
-    // 1. Receive incoming values from children
     std::set<TreeCoordinates> incoming_coordinates;
+
+    receive_incoming_coordinates(comm, incoming_coordinates);
+
+    if (!is_root) {
+        send_outgoing_coordinates(comm);
+    }
+
+    for (auto &[x, y]: outgoing) {
+        compute_operations(incoming_coordinates, operations, local_compute_coords, x, y);
+    }
+
+    stack.reserve(compute_maximum_stack_size());
+    inbox.reserve(local_compute_coords.size() + incoming_coordinates.size());
+
+#ifdef DEBUG_TRACE
+    printf("rank %lu (permuted %i) region %zu-%zu max_stack_size %zu inbox capacity %zu incoming ", rank,
+           rank_to_array_order(rank), regions[rank].globalStartIndex,
+           regions[rank].globalStartIndex + regions[rank].size, stack.capacity(), inbox.capacity());
+
+    for (const auto &e: incoming_coordinates) {
+
+        printf("(%lu, %i) ", e.first, e.second);
+    }
+    printf(" outgoing ");
+    for (const auto &v: outgoing) {
+        printf("(%zu, %u)", v.first, v.second);
+    }
+
+    printf("\n");
+#endif
+}
+
+void DualTreeSummation::receive_incoming_coordinates(MPI_Comm comm, std::set<TreeCoordinates> &incoming_coordinates) {
     for (auto permuted_child_rank: topology.get_comm_children()) {
         const auto child_rank = array_to_rank_order(permuted_child_rank);
         uint64_t count;
@@ -53,58 +85,31 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
             incoming_coordinates.insert(tc);
         }
     }
-
-    // 2. Send out our outgoing values to parent in comm tree
-    if (!is_root) {
-        uint64_t count = outgoing.size();
-        MPI_Send(&count, 1, MPI_UINT64_T, rank_of_comm_parent, OUTGOING_SIZE_MSG_TAG, comm);
-        MPI_Send(outgoing.data(), count * sizeof(TreeCoordinates), MPI_BYTE, rank_of_comm_parent, OUTGOING_MSG_TAG,
-                 comm);
-    }
-
-    for (auto &[x, y]: outgoing) {
-        compute_operations(incoming_coordinates, operations, local_compute_coords, x, y);
-    }
-
-    // Compute maximum size of local accumulation stack
-    auto maximum_stack_size = 0UL;
-    {
-        auto stack_size = 0UL;
-
-        for (const auto op: operations) {
-            if (op == OPERATION_REDUCE) {
-                assert(stack_size >= 2);
-                --stack_size;
-            } else {
-                ++stack_size;
-            }
-            maximum_stack_size = std::max(maximum_stack_size, stack_size);
-        }
-        stack.reserve(maximum_stack_size);
-    }
-
-
-    inbox.reserve(local_compute_coords.size() + incoming_coordinates.size());
-
-#ifdef DEBUG_TRACE
-    printf("rank %lu (permuted %i) region %zu-%zu max_stack_size %zu inbox capacity %zu incoming ", rank,
-           rank_to_array_order(rank), regions[rank].globalStartIndex,
-           regions[rank].globalStartIndex + regions[rank].size, maximum_stack_size, inbox.capacity());
-
-    for (const auto &e: incoming_coordinates) {
-
-        printf("(%lu, %i) ", e.first, e.second);
-    }
-    printf(" outgoing ");
-    for (const auto &v: outgoing) {
-        printf("(%zu, %u)", v.first, v.second);
-    }
-
-    printf("\n");
-#endif
 }
 
-DualTreeSummation::~DualTreeSummation() {}
+void DualTreeSummation::send_outgoing_coordinates(MPI_Comm comm) const {
+    uint64_t count = outgoing.size();
+    MPI_Send(&count, 1, MPI_UINT64_T, rank_of_comm_parent, OUTGOING_SIZE_MSG_TAG, comm);
+    MPI_Send(outgoing.data(), count * sizeof(TreeCoordinates), MPI_BYTE, rank_of_comm_parent, OUTGOING_MSG_TAG, comm);
+}
+
+size_t DualTreeSummation::compute_maximum_stack_size() const {
+    auto maximum_stack_size = 0UL;
+    auto stack_size = 0UL;
+
+    for (const auto op: operations) {
+        if (op == OPERATION_REDUCE) {
+            assert(stack_size >= 2);
+            --stack_size;
+        } else {
+            ++stack_size;
+        }
+        maximum_stack_size = std::max(maximum_stack_size, stack_size);
+    }
+    return maximum_stack_size;
+}
+
+DualTreeSummation::~DualTreeSummation() = default;
 
 
 double *DualTreeSummation::getBuffer() { return accumulation_buffer.data(); }
