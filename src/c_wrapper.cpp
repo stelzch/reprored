@@ -2,6 +2,7 @@
 #include <binary_tree_summation.h>
 #include <binary_tree_summation.hpp>
 #include <cstring>
+#include <dual_tree_summation.hpp>
 #include <kgather_summation.hpp>
 #include <mpi.h>
 #include <reproblas_summation.hpp>
@@ -13,7 +14,7 @@
 /* TODO: Remove global state. This is a crude hack. */
 MPI_Comm default_communicator = MPI_COMM_WORLD;
 
-enum ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER };
+enum class ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER, DUAL_TREE };
 ReductionMode env2mode();
 uint64_t env2k();
 
@@ -22,21 +23,24 @@ ReductionMode global_reduction_mode = env2mode();
 uint64_t global_k = env2k();
 
 std::string reduction_mode_to_string(ReductionMode rm) {
-    switch(rm) {
-        case ALLREDUCE:
+    switch (rm) {
+        case ReductionMode::ALLREDUCE:
             return "ALLREDUCE";
-        case REPROBLAS:
+        case ReductionMode::REPROBLAS:
             return "REPROBLAS";
-        case BINARY_TREE:
+        case ReductionMode::BINARY_TREE:
             return "BINARY_TREE";
-        case KGATHER:
+        case ReductionMode::KGATHER:
             return "KGATHER";
+        case ReductionMode::DUAL_TREE:
+            return "DUAL_TREE";
         default:
             return "UNKNOWN";
     }
 }
 
-std::string reduction_mode_string = reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k);
+std::string reduction_mode_string =
+        reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k);
 
 void set_default_reduction_context_communicator(intptr_t communicator) {
     MPI_Comm comm = (MPI_Comm) (communicator);
@@ -47,22 +51,28 @@ ReductionMode env2mode() {
     const char *mode_env = getenv("REPR_REDUCE");
 
     if (mode_env == nullptr) {
-        return ALLREDUCE;
+        return ReductionMode::ALLREDUCE;
     }
 
     const auto mode = std::string(mode_env);
 
     if (mode == "REPROBLAS") {
-        return REPROBLAS;
-    } else if (mode == "BINARY_TREE") {
-        return BINARY_TREE;
-    } else if (mode == "KGATHER") {
-        return KGATHER;
-    } else if (mode == "ALLREDUCE") {
-        return ALLREDUCE;
-    } else {
-        throw std::runtime_error("invalid reduction mode given in environment variable REPR_REDUCE");
+        return ReductionMode::REPROBLAS;
     }
+    if (mode == "BINARY_TREE") {
+        return ReductionMode::BINARY_TREE;
+    }
+    if (mode == "KGATHER") {
+        return ReductionMode::KGATHER;
+    }
+    if (mode == "ALLREDUCE") {
+        return ReductionMode::ALLREDUCE;
+    }
+    if (mode == "DUAL_TREE") {
+        return ReductionMode::DUAL_TREE;
+    }
+
+    throw std::runtime_error("invalid reduction mode given in environment variable REPR_REDUCE");
 }
 
 uint64_t env2k() {
@@ -89,7 +99,7 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
     MPI_Comm_rank(comm, &rank);
 
     switch (global_reduction_mode) {
-        case BINARY_TREE: {
+        case ReductionMode::BINARY_TREE: {
             region r;
             r.globalStartIndex = global_start_idx;
             r.size = local_summands;
@@ -100,7 +110,17 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
 
             return new BinaryTreeSummation(rank, std::move(regions), k, comm);
         }
-        case KGATHER: {
+        case ReductionMode::DUAL_TREE: {
+            region r;
+            r.globalStartIndex = global_start_idx;
+            r.size = local_summands;
+
+            std::vector<region> regions(size, r);
+
+            MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region), MPI_BYTE, comm);
+            return new DualTreeSummation(rank, std::move(regions), comm);
+        }
+        case ReductionMode::KGATHER: {
             region r;
             r.globalStartIndex = global_start_idx;
             r.size = local_summands;
@@ -111,13 +131,14 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
 
             return new KGatherSummation(rank, std::move(regions), k, comm);
         }
-        case REPROBLAS: {
+        case ReductionMode::REPROBLAS: {
             return new ReproblasSummation(comm, local_summands);
         }
-        case ALLREDUCE:
-        default: {
+        case ReductionMode::ALLREDUCE: {
             return new AllreduceSummation(comm, local_summands);
         }
+        default:
+            throw new std::runtime_error("invalid reduction mode encountered");
     }
 }
 
@@ -208,6 +229,4 @@ void attach_debugger_env() {
     }
 }
 
-const char *get_reproducible_reduction_mode() {
-    return reduction_mode_string.c_str();
-}
+const char *get_reproducible_reduction_mode() { return reduction_mode_string.c_str(); }

@@ -32,7 +32,7 @@ constexpr auto OPERATION_REDUCE = false;
  */
 class DualTreeSummation : public Summation {
 public:
-    DualTreeSummation(uint64_t rank, const vector<region> &regions, MPI_Comm comm = MPI_COMM_WORLD);
+    DualTreeSummation(uint64_t rank, const vector<region> regions, MPI_Comm comm = MPI_COMM_WORLD);
 
     virtual ~DualTreeSummation();
 

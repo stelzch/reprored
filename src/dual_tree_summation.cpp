@@ -12,7 +12,7 @@
 #endif
 
 
-DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> &regions_, MPI_Comm comm) :
+DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions_, MPI_Comm comm) :
     comm{comm},
     comm_size(regions_.size()),
     rank{rank},
