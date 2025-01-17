@@ -37,7 +37,7 @@ public:
     virtual ~DualTreeSummation();
 
     double *getBuffer() override;
-    uint64_t getBufferSize();
+    uint64_t getBufferSize() const;
     void storeSummand(uint64_t localIndex, double val);
 
     /* Sum all numbers. Will return the total sum on rank 0
@@ -54,17 +54,17 @@ private:
     void local_accumulate_into_inbox();
     void execute_operations();
     void receive_values_into_inbox();
-    double broadcast_result();
-    void send_outgoing_values();
+    double broadcast_result() const;
+    void send_outgoing_values() const;
     inline auto array_to_rank_order(const int rank) const { return rank_order[rank]; }
     inline auto rank_to_array_order(const int rank) const { return inverse_rank_order[rank]; }
     double accumulate(uint64_t x, uint32_t y);
     void flush();
 
-    vector<region> compute_normalized_regions(const vector<region> &regions) const;
-    const vector<int> compute_rank_order(const vector<region> &regions) const;
-    const vector<int> compute_inverse_rank_order(const vector<int> &rank_order) const;
-    const vector<region> compute_permuted_regions(const vector<region> &regions) const;
+    static vector<region> compute_normalized_regions(const vector<region> &regions);
+    vector<int> compute_rank_order(const vector<region> &regions) const;
+    vector<int> compute_inverse_rank_order(const vector<int> &rank_order) const;
+    vector<region> compute_permuted_regions(const vector<region> &regions) const;
 
     double sum_remaining_8tree(const uint64_t initialRemainingElements, const int y, double *buffer) const {
         uint64_t remainingElements = initialRemainingElements;

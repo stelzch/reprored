@@ -80,7 +80,6 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
             }
             maximum_stack_size = std::max(maximum_stack_size, stack_size);
         }
-
         stack.reserve(maximum_stack_size);
     }
 
@@ -109,39 +108,11 @@ DualTreeSummation::~DualTreeSummation() {}
 
 
 double *DualTreeSummation::getBuffer() { return accumulation_buffer.data(); }
-uint64_t DualTreeSummation::getBufferSize() { return accumulation_buffer.size(); }
+uint64_t DualTreeSummation::getBufferSize() const { return accumulation_buffer.size(); }
 
 void DualTreeSummation::storeSummand(uint64_t localIndex, double val) { accumulation_buffer[localIndex] = val; }
 
-void DualTreeSummation::receive_values_into_inbox() {
-    for (auto i = 0U; i < topology.get_comm_children().size(); ++i) {
-        const uint64_t count = incoming_element_count[i];
-
-        const auto permuted_child_rank = topology.get_comm_children()[i];
-        const auto child_rank = array_to_rank_order(permuted_child_rank);
-
-        // Insert elements at the end of the inbox
-        const auto buf_start_index = inbox.size();
-        inbox.resize(inbox.size() + count);
-
-        MPI_Recv(&inbox[buf_start_index], count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
-    }
-}
-double DualTreeSummation::broadcast_result() {
-    double result;
-    if (is_root) {
-        assert(stack.size() == 1);
-        result = stack.at(0);
-    }
-
-    MPI_Bcast(&result, 1, MPI_DOUBLE, array_to_rank_order(0), comm);
-    return result;
-}
-void DualTreeSummation::send_outgoing_values() {
-    assert(stack.size() == outgoing.size());
-    MPI_Send(stack.data(), outgoing.size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
-}
-double DualTreeSummation::accumulate(void) {
+double DualTreeSummation::accumulate() {
     inbox.clear();
 
     // 1. Reduce all fully local subtrees
@@ -160,6 +131,12 @@ double DualTreeSummation::accumulate(void) {
 
     // 4. Broadcast global value
     return broadcast_result();
+}
+
+void DualTreeSummation::local_accumulate_into_inbox() {
+    for (auto &[x, y]: local_compute_coords) {
+        inbox.push_back(local_accumulate(x, y));
+    }
 }
 
 /** Special case where the subtree under (x,y) is fully local, we do not need to perform any boundary checks */
@@ -206,6 +183,21 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     return buffer[0];
 }
 
+void DualTreeSummation::receive_values_into_inbox() {
+    for (auto i = 0U; i < topology.get_comm_children().size(); ++i) {
+        const uint64_t count = incoming_element_count[i];
+
+        const auto permuted_child_rank = topology.get_comm_children()[i];
+        const auto child_rank = array_to_rank_order(permuted_child_rank);
+
+        // Insert elements at the end of the inbox
+        const auto buf_start_index = inbox.size();
+        inbox.resize(inbox.size() + count);
+
+        MPI_Recv(&inbox[buf_start_index], count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
+    }
+}
+
 void DualTreeSummation::execute_operations() {
     stack.clear();
 
@@ -231,10 +223,20 @@ void DualTreeSummation::execute_operations() {
     assert(stack.size() == outgoing.size());
 }
 
-void DualTreeSummation::local_accumulate_into_inbox() {
-    for (auto &[x, y]: local_compute_coords) {
-        inbox.push_back(local_accumulate(x, y));
+void DualTreeSummation::send_outgoing_values() const {
+    assert(stack.size() == outgoing.size());
+    MPI_Send(stack.data(), outgoing.size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
+}
+
+double DualTreeSummation::broadcast_result() const {
+    double result;
+    if (is_root) {
+        assert(stack.size() == 1);
+        result = stack.at(0);
     }
+
+    MPI_Bcast(&result, 1, MPI_DOUBLE, array_to_rank_order(0), comm);
+    return result;
 }
 
 void DualTreeSummation::compute_operations(const std::set<TreeCoordinates> &incoming, vector<operation> &ops,
@@ -261,7 +263,7 @@ void DualTreeSummation::compute_operations(const std::set<TreeCoordinates> &inco
     }
 }
 
-vector<region> DualTreeSummation::compute_normalized_regions(const vector<region> &regions) const {
+vector<region> DualTreeSummation::compute_normalized_regions(const vector<region> &regions) {
     const auto global_size = total_region_size(regions.begin(), regions.end());
     vector<region> result;
 
@@ -276,7 +278,7 @@ vector<region> DualTreeSummation::compute_normalized_regions(const vector<region
     return result;
 }
 
-const vector<int> DualTreeSummation::compute_rank_order(const vector<region> &regions) const {
+vector<int> DualTreeSummation::compute_rank_order(const vector<region> &regions) const {
     vector<int> rank_order(comm_size);
 
     std::iota(rank_order.begin(), rank_order.end(), 0);
@@ -304,7 +306,7 @@ const vector<int> DualTreeSummation::compute_rank_order(const vector<region> &re
     return rank_order;
 }
 
-const vector<int> DualTreeSummation::compute_inverse_rank_order(const vector<int> &rank_order) const {
+vector<int> DualTreeSummation::compute_inverse_rank_order(const vector<int> &rank_order) const {
     vector<int> inverse(rank_order.size());
 
     for (auto i = 0U; i < rank_order.size(); ++i) {
@@ -314,7 +316,7 @@ const vector<int> DualTreeSummation::compute_inverse_rank_order(const vector<int
     return inverse;
 }
 
-const vector<region> DualTreeSummation::compute_permuted_regions(const vector<region> &regions) const {
+vector<region> DualTreeSummation::compute_permuted_regions(const vector<region> &regions) const {
     vector<region> result(regions.size());
 
     for (auto i = 0U; i < regions.size(); ++i) {

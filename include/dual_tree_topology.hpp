@@ -15,10 +15,8 @@ using TreeCoordinates = pair<uint64_t, uint32_t>; // x and y coordinate
 
 
 template<>
-struct std::hash<TreeCoordinates>
-{
-    std::size_t operator()(const TreeCoordinates& k) const
-    {
+struct std::hash<TreeCoordinates> {
+    std::size_t operator()(const TreeCoordinates &k) const noexcept {
         return k.first ^ static_cast<uint64_t>(k.second);
     }
 };
@@ -115,7 +113,7 @@ public:
     }
 
     static constexpr int32_t pow2(uint32_t x) { return 1 << x; }
-    uint64_t compute_global_size(const vector<region> &regions) {
+    static uint64_t compute_global_size(const vector<region> &regions) {
         uint64_t global_size{0};
 
         for (const auto &region: regions) {
@@ -207,7 +205,7 @@ private:
         collect_incoming_from_subtree(incoming, right_x, y - 1);
     }
 
-    vector<TreeCoordinates> compute_outgoing(const vector<region> &regions) {
+    vector<TreeCoordinates> compute_outgoing(const vector<region> &regions) const {
         vector<TreeCoordinates> outgoing;
 
         if (local_start_index == local_end_index) {
