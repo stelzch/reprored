@@ -12,17 +12,17 @@
 #endif
 
 
-DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions_, MPI_Comm comm) :
+DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions_, MPI_Comm comm,
+                                     const unsigned int m) :
     comm{comm},
     comm_size(regions_.size()),
     rank{rank},
     regions{compute_normalized_regions(regions_)},
     rank_order{compute_rank_order(regions)},
     inverse_rank_order{compute_inverse_rank_order(rank_order)},
-    topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions)},
+    topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions), m},
     outgoing(topology.get_outgoing()),
-    rank_of_comm_parent(
-            rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.parent(rank_to_array_order(rank)))),
+    rank_of_comm_parent(rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.get_comm_parent())),
     is_root(rank_to_array_order(DualTreeSummation::rank) == 0) {
     accumulation_buffer.resize(topology.get_local_size());
 

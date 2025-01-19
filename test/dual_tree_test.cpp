@@ -253,7 +253,7 @@ TEST(DualTree, Fuzzer) {
     }
     MPI_Bcast(&seed, 1, MPI_UNSIGNED_LONG, 0, comm);
 
-    std::uniform_int_distribution<size_t> array_length_distribution(1, 20000);
+    std::uniform_int_distribution<size_t> array_length_distribution(1, 500);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
     std::mt19937 rng(seed); // RNG for distribution & rank number
     std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)

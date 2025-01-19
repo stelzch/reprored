@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include "MAryTree.hpp"
+
 using std::pair;
 using std::vector;
 
@@ -26,25 +28,27 @@ public:
     /**
      * Construct class representing a dual tree topology where
      *  (a) one binary tree spanning the array elements defines the reduction order (reduction tree) and
-     *  (b) another binary tree spanning the list of processing elements (PEs) defines the communication order (comm
+     *  (b) another m-ary tree spanning the list of processing elements (PEs) defines the communication order (comm
      * tree)
      *
      *  We require that the regions are allocated in ascending order, i.e. the first few elements must lie on rank 0,
      * the next on rank 1 and so on.
      * @param rank Rank of the calling process
-     * @param regions List
+     * @param regions List of regions
+     * @param m construct comm tree as m-ary tree
      */
-    DualTreeTopology(int rank, const vector<region> &regions) :
+    DualTreeTopology(const int rank, const vector<region> &regions, const unsigned int m = 2) :
         rank{rank},
         cluster_size{regions.size()},
         is_last_rank(compute_is_last_rank(rank, regions)),
-        largest_comm_child{rank == 0 ? cluster_size - 1 : largest_child_index(rank)},
         local_start_index(regions.at(rank).globalStartIndex),
         local_end_index(local_start_index + regions[rank].size),
         global_size{compute_global_size(regions)},
+        comm_tree{cluster_size, m},
+        comm_children(comm_tree.subtree_children(rank)),
+        largest_comm_child{comm_tree.largest_child_index(rank)},
         comm_end_index(compute_global_comm_end_index(rank, regions)),
-        outgoing{compute_outgoing(regions)},
-        comm_children(compute_comm_children()) {
+        outgoing{compute_outgoing(regions)} {
 
         assert(!regions.empty());
         for (auto i = 0U; i < regions.size() - 1; ++i) {
@@ -57,7 +61,7 @@ public:
     /// Get coordinates of intermediate results that are computed on this rank and sent out accordingly.
     const vector<TreeCoordinates> &get_outgoing() const { return outgoing; }
 
-    const vector<int> &get_comm_children() const { return comm_children; }
+    const vector<uint64_t> &get_comm_children() const { return comm_children; }
 
     // Helper functions
     /**
@@ -182,6 +186,8 @@ public:
     uint64_t get_local_end_index() const { return local_end_index; }
     uint64_t get_global_size() const { return global_size; }
 
+    uint64_t get_comm_parent() const { return comm_tree.parent(rank); }
+
 private:
     // Constructor-related functions
     void collect_incoming_from_subtree(vector<TreeCoordinates> &incoming, uint64_t x, int32_t y) {
@@ -250,16 +256,6 @@ private:
         return successor_region->globalStartIndex;
     }
 
-    std::vector<int> compute_comm_children() const {
-        std::vector<int> result;
-
-        for (int32_t y = 0; y < max_y(rank, cluster_size); ++y) {
-            result.push_back(rank + pow2(y));
-        }
-
-        return result;
-    }
-
     bool compute_is_last_rank(const int rank, const vector<region> &regions) {
         if (rank == cluster_size - 1) {
             return true;
@@ -275,8 +271,6 @@ private:
     const int rank;
     const uint64_t cluster_size;
     const bool is_last_rank;
-    /** Largest rank that sends their result to us, possibly over an intermediary. */
-    const uint64_t largest_comm_child;
 
     /** Global index of the first element this PE holds locally. */
     const uint64_t local_start_index;
@@ -289,6 +283,12 @@ private:
     const uint64_t global_size;
 
 
+    const MAryTree comm_tree;
+    const vector<uint64_t> comm_children;
+
+    /** Largest rank that sends their result to us, possibly over an intermediary. */
+    const uint64_t largest_comm_child;
+
     /** The global index of the first element that no longer located on a rank that sends their intermediate
      * results to us. I.e. the global start index of the first PE with a higher rank than ours who sends their results
      * to a rank lower than us. This is important because we do not have to wait on intermediate results with index
@@ -296,6 +296,6 @@ private:
      */
     const uint64_t comm_end_index;
 
+    /// TreeCoordinates that are sent outwards for processing on the parent rank
     const vector<TreeCoordinates> outgoing;
-    const vector<int> comm_children;
 };

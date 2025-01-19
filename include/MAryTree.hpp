@@ -8,6 +8,12 @@
 
 /**
  * M-ary tree over consecutive array indices.
+ *
+ *
+ *
+ * Example tree with \f$n=12,\, m=3\f$
+ *
+ * ![](tree_n=12_m=3.svg)
  */
 class MAryTree {
 public:
