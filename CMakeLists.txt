@@ -27,12 +27,13 @@ list(APPEND WRAPPER_SRC src/c_wrapper.cpp src/binary_tree_summation.cpp src/mess
 
 add_definitions(-DAVX -DREPRODUCIBLE=${REPRODUCIBLE})
 add_library(binarytreesummation STATIC
-        include/dual_tree_topology.hpp)
+        include/dual_tree_topology.hpp
+        include/MAryTree.hpp)
 target_sources(binarytreesummation
         PRIVATE ${WRAPPER_SRC}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(binarytreesummation PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic $<$<CONFIG:DEBUG>:-fsanitize=undefined>)
+target_compile_options(binarytreesummation PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic)
 target_link_libraries(binarytreesummation PUBLIC -ltbb)
 
 target_compile_definitions(binarytreesummation PRIVATE $<$<CONFIG:DEBUG>:DEBUG_TRACE>)
@@ -98,7 +99,8 @@ if (BUILD_TESTS)
     FetchContent_MakeAvailable(kassert)
 
     add_executable(test test/main.cpp test/reproducibility_test.cpp test/chunked_array_test.cpp
-            test/dual_tree_test.cpp)
+            test/dual_tree_test.cpp
+            test/m_ary_tree.cpp)
     target_link_libraries(test GTest::gtest_main GTest::gmock MPI::MPI_CXX kassert binarytreesummation)
 
     include(GoogleTest)
