@@ -13,27 +13,25 @@ constexpr int OUTGOING_SIZE_MSG_TAG = 20232;
 constexpr int OUTGOING_MSG_TAG = 20233;
 constexpr int TRANSFER_MSG_TAG = 20234;
 
-typedef bool operation;
-constexpr auto OPERATION_PUSH = true;
-constexpr auto OPERATION_REDUCE = false;
 
 /**
  * Reproducible summation using two binary trees: a reduction tree that defines the order of computation and a
- * communication tree that defines the direction of communication. Each rank receives intermediate results from its
- * child nodes in the communication tree, reduces them as much as possible together with the "local" array values and
- * sends them out to the communication tree parent.
+ * communication tree that defines the direction of communication. Each rank receives intermediate results from
+ * its child nodes in the communication tree, reduces them as much as possible together with the "local" array
+ * values and sends them out to the communication tree parent.
  *
  * Figuring out which of the received values can be used with local computations and which must be passed on is
  * non-trivial. To avoid large overhead during the reduction, we use a precomputed set of operations on a stack.
- * The #inbox vector stores the reduction results of the local elements alongside the intermediate results received from
- * other ranks. Because these are stored in the same order as they are consumed, we do not need to keep track of the
- * exact coordinates. The operations then encode when to push a value from the inbox onto the stack and when to reduce
- * the two topmost values.
+ * The #inbox vector stores the reduction results of the local elements alongside the intermediate results
+ * received from other ranks. Because these are stored in the same order as they are consumed, we do not need to
+ * keep track of the exact coordinates. The operations then encode when to push a value from the inbox onto the
+ * stack and when to reduce the two topmost values.
  */
 class DualTreeSummation : public Summation {
 public:
     DualTreeSummation(uint64_t rank, const vector<region> regions, MPI_Comm comm = MPI_COMM_WORLD,
                       const unsigned int m = 2);
+
 
     virtual ~DualTreeSummation();
 
@@ -45,15 +43,12 @@ public:
      */
     double accumulate(void) override;
 
-    using TreeCoordinates = std::pair<uint64_t, uint32_t>;
-
 
 private:
+    std::set<TreeCoordinates> exchange_coordinates(MPI_Comm comm);
     void receive_incoming_coordinates(MPI_Comm comm, std::set<std::pair<uint64_t, uint32_t>> &incoming_coordinates);
     void send_outgoing_coordinates(MPI_Comm comm) const;
     unsigned long compute_maximum_stack_size() const;
-    void compute_operations(const std::set<std::pair<uint64_t, uint32_t>> &incoming, vector<operation> &ops,
-                            vector<std::pair<uint64_t, uint32_t>> &local_coords, uint64_t x, uint32_t y);
     double local_accumulate(uint64_t x, uint32_t y);
     void local_accumulate_into_inbox();
     void execute_operations();
@@ -130,9 +125,8 @@ private:
 
     const DualTreeTopology topology;
     vector<uint64_t> incoming_element_count; ///< Number of elements received from each child rank.
-    vector<operation> operations;
-    vector<TreeCoordinates> local_compute_coords; ///< Coords of subtrees that are fully local to this rank
-    vector<TreeCoordinates> outgoing; ///< Coords we send out to other ranks
+
+    operation_result operations;
     vector<double> stack; ///< Stack for intermediate values during computations
 
     vector<double, AlignedAllocator<double>> accumulation_buffer;

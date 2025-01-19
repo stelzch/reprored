@@ -5,6 +5,7 @@
 #include <util.hpp>
 
 #include <bit>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -15,6 +16,18 @@ using std::vector;
 
 using TreeCoordinates = pair<uint64_t, uint32_t>; // x and y coordinate
 
+
+typedef bool operation;
+constexpr auto OPERATION_PUSH = true; /// Consume value from available intermediate results and push onto working stack
+constexpr auto OPERATION_REDUCE = false; /// Reduce & consume two top-most values from working stack and push result
+
+/**
+ * Defines operations to be performed on a given rank.
+ */
+struct operation_result {
+    vector<operation> ops; /// Steps to perform on local results and in values from inbox
+    vector<TreeCoordinates> local_coords; /// Coordinates that must be computed from PE-local array data
+};
 
 template<>
 struct std::hash<TreeCoordinates> {
@@ -148,37 +161,14 @@ public:
         }
     }
 
-    TreeCoordinates get_reduction_partner(uint64_t x, uint32_t y) const {
-        const auto _max_y = max_y_untrunc(x, global_size);
-        assert(y <= _max_y);
+    operation_result compute_operations(const std::set<TreeCoordinates> &incoming) const {
+        operation_result result;
 
-        if (y < _max_y) {
-            // Reduce into our index, a.k.a. other value comes from the right
-            uint64_t other_x = x + pow2(y);
-            uint32_t other_y = y;
-
-            if (other_x < global_size) {
-                return TreeCoordinates(other_x, other_y);
-            } else {
-                return TreeCoordinates(parent(x), _max_y);
-            }
-
-        } else {
-            // Reduce into other index, a.k.a. our value moves to the left
-            assert(x >= pow2(y));
-            return TreeCoordinates(parent(x), y);
+        for (const auto &[x, y]: outgoing) {
+            compute_operations_rec(incoming, result, x, y);
         }
-    }
 
-    bool is_passthrough_element(const uint64_t x, uint32_t y) const {
-        if (rank == 0) {
-            return false;
-        }
-        const auto next_element_needed_in_reduction = get_reduction_partner(x, y);
-        return get_local_size() == 0 || parent(x) < get_local_start_index() ||
-               !is_subtree_comm_local(next_element_needed_in_reduction.first, next_element_needed_in_reduction.second);
-        // return rank != 0 && (get_local_size() == 0 || parent(x) < local_start_index ||
-        //                      next_element_needed_in_reduction >= comm_end_index);
+        return result;
     }
 
     uint64_t get_local_size() const { return local_end_index - local_start_index; }
@@ -189,28 +179,35 @@ public:
     uint64_t get_comm_parent() const { return comm_tree.parent(rank); }
 
 private:
-    // Constructor-related functions
-    void collect_incoming_from_subtree(vector<TreeCoordinates> &incoming, uint64_t x, int32_t y) {
-        if (y == 0) {
+    /**
+     * Determine the set of operations \p result that transform an inbox of \p incoming coordinates into an outgoing
+     * coordinate \p x, \p y.
+     */
+    void compute_operations_rec(const std::set<TreeCoordinates> &incoming, operation_result &result, uint64_t x,
+                                uint32_t y) const {
+        if (incoming.contains(TreeCoordinates(x, y))) {
+            result.ops.push_back(OPERATION_PUSH);
             return;
         }
 
-        const auto left_x = x;
-        const auto right_x = left_x + pow2(y - 1);
-
-        if (right_x >= local_end_index) {
-            // Found new incoming
-            incoming.emplace_back(right_x, y - 1);
-
-            collect_incoming_from_subtree(incoming, left_x, y - 1);
+        if (y == 0 || is_subtree_local(x, y)) {
+            result.local_coords.push_back(TreeCoordinates(x, y));
+            result.ops.push_back(OPERATION_PUSH);
             return;
         }
 
-        // Recurse to subtrees
-        collect_incoming_from_subtree(incoming, left_x, y - 1);
-        collect_incoming_from_subtree(incoming, right_x, y - 1);
+        const TreeCoordinates left_child = {x, y - 1};
+        const TreeCoordinates right_child = {x + pow2(y - 1), y - 1};
+
+
+        compute_operations_rec(incoming, result, left_child.first, left_child.second);
+        if (right_child.first < get_global_size()) {
+            compute_operations_rec(incoming, result, right_child.first, right_child.second);
+            result.ops.push_back(OPERATION_REDUCE);
+        }
     }
 
+    // Constructor-related functions
     vector<TreeCoordinates> compute_outgoing(const vector<region> &regions) const {
         vector<TreeCoordinates> outgoing;
 

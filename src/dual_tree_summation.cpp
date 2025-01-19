@@ -21,9 +21,9 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
     rank_order{compute_rank_order(regions)},
     inverse_rank_order{compute_inverse_rank_order(rank_order)},
     topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions), m},
-    outgoing(topology.get_outgoing()),
     rank_of_comm_parent(rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.get_comm_parent())),
     is_root(rank_to_array_order(DualTreeSummation::rank) == 0) {
+
     accumulation_buffer.resize(topology.get_local_size());
 
     assert(rank_to_array_order(rank) != 0 || is_root);
@@ -35,21 +35,13 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
     // sorted low to high. This is important in order to obtain correct ordering inside the inbox array.
     assert(std::is_sorted(topology.get_comm_children().begin(), topology.get_comm_children().end()));
 
-    // Determine incoming + outgoing values
-    std::set<TreeCoordinates> incoming_coordinates;
+    const std::set<TreeCoordinates> incoming_coordinates = exchange_coordinates(comm);
 
-    receive_incoming_coordinates(comm, incoming_coordinates);
+    operations = topology.compute_operations(incoming_coordinates);
 
-    if (!is_root) {
-        send_outgoing_coordinates(comm);
-    }
-
-    for (auto &[x, y]: outgoing) {
-        compute_operations(incoming_coordinates, operations, local_compute_coords, x, y);
-    }
 
     stack.reserve(compute_maximum_stack_size());
-    inbox.reserve(local_compute_coords.size() + incoming_coordinates.size());
+    inbox.reserve(operations.local_coords.size() + incoming_coordinates.size());
 
 #ifdef DEBUG_TRACE
     printf("rank %lu (permuted %i) region %zu-%zu max_stack_size %zu inbox capacity %zu incoming ", rank,
@@ -61,7 +53,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
         printf("(%lu, %i) ", e.first, e.second);
     }
     printf(" outgoing ");
-    for (const auto &v: outgoing) {
+    for (const auto &v: topology.get_outgoing()) {
         printf("(%zu, %u)", v.first, v.second);
     }
 
@@ -69,7 +61,20 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
 #endif
 }
 
-void DualTreeSummation::receive_incoming_coordinates(MPI_Comm comm, std::set<TreeCoordinates> &incoming_coordinates) {
+
+std::set<TreeCoordinates> DualTreeSummation::exchange_coordinates(MPI_Comm comm) {
+    std::set<TreeCoordinates> incoming_coordinates;
+    receive_incoming_coordinates(comm, incoming_coordinates);
+
+    if (!is_root) {
+        send_outgoing_coordinates(comm);
+    }
+
+    return incoming_coordinates;
+}
+
+void DualTreeSummation::receive_incoming_coordinates(const MPI_Comm comm,
+                                                     std::set<TreeCoordinates> &incoming_coordinates) {
     for (auto permuted_child_rank: topology.get_comm_children()) {
         const auto child_rank = array_to_rank_order(permuted_child_rank);
         uint64_t count;
@@ -87,17 +92,18 @@ void DualTreeSummation::receive_incoming_coordinates(MPI_Comm comm, std::set<Tre
     }
 }
 
-void DualTreeSummation::send_outgoing_coordinates(MPI_Comm comm) const {
-    uint64_t count = outgoing.size();
+void DualTreeSummation::send_outgoing_coordinates(const MPI_Comm comm) const {
+    uint64_t count = topology.get_outgoing().size();
     MPI_Send(&count, 1, MPI_UINT64_T, rank_of_comm_parent, OUTGOING_SIZE_MSG_TAG, comm);
-    MPI_Send(outgoing.data(), count * sizeof(TreeCoordinates), MPI_BYTE, rank_of_comm_parent, OUTGOING_MSG_TAG, comm);
+    MPI_Send(topology.get_outgoing().data(), count * sizeof(TreeCoordinates), MPI_BYTE, rank_of_comm_parent,
+             OUTGOING_MSG_TAG, comm);
 }
 
 size_t DualTreeSummation::compute_maximum_stack_size() const {
     auto maximum_stack_size = 0UL;
     auto stack_size = 0UL;
 
-    for (const auto op: operations) {
+    for (const auto op: operations.ops) {
         if (op == OPERATION_REDUCE) {
             assert(stack_size >= 2);
             --stack_size;
@@ -139,7 +145,7 @@ double DualTreeSummation::accumulate() {
 }
 
 void DualTreeSummation::local_accumulate_into_inbox() {
-    for (auto &[x, y]: local_compute_coords) {
+    for (auto &[x, y]: operations.local_coords) {
         inbox.push_back(local_accumulate(x, y));
     }
 }
@@ -208,7 +214,7 @@ void DualTreeSummation::execute_operations() {
 
     auto it = inbox.begin();
 
-    for (const auto op: operations) {
+    for (const auto op: operations.ops) {
         if (op == OPERATION_PUSH) {
             stack.push_back(*it);
             ++it;
@@ -225,12 +231,12 @@ void DualTreeSummation::execute_operations() {
         }
     }
 
-    assert(stack.size() == outgoing.size());
+    assert(stack.size() == topology.get_outgoing().size());
 }
 
 void DualTreeSummation::send_outgoing_values() const {
-    assert(stack.size() == outgoing.size());
-    MPI_Send(stack.data(), outgoing.size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
+    assert(stack.size() == topology.get_outgoing().size());
+    MPI_Send(stack.data(), topology.get_outgoing().size(), MPI_DOUBLE, rank_of_comm_parent, TRANSFER_MSG_TAG, comm);
 }
 
 double DualTreeSummation::broadcast_result() const {
@@ -244,29 +250,6 @@ double DualTreeSummation::broadcast_result() const {
     return result;
 }
 
-void DualTreeSummation::compute_operations(const std::set<TreeCoordinates> &incoming, vector<operation> &ops,
-                                           vector<TreeCoordinates> &local_coords, uint64_t x, uint32_t y) {
-    if (incoming.contains(TreeCoordinates(x, y))) {
-        ops.push_back(OPERATION_PUSH);
-        return;
-    }
-
-    if (y == 0 || topology.is_subtree_local(x, y)) {
-        local_coords.push_back(TreeCoordinates(x, y));
-        ops.push_back(OPERATION_PUSH);
-        return;
-    }
-
-    const TreeCoordinates left_child = {x, y - 1};
-    const TreeCoordinates right_child = {x + DualTreeTopology::pow2(y - 1), y - 1};
-
-
-    compute_operations(incoming, ops, local_coords, left_child.first, left_child.second);
-    if (right_child.first < topology.get_global_size()) {
-        compute_operations(incoming, ops, local_coords, right_child.first, right_child.second);
-        ops.push_back(OPERATION_REDUCE);
-    }
-}
 
 vector<region> DualTreeSummation::compute_normalized_regions(const vector<region> &regions) {
     const auto global_size = total_region_size(regions.begin(), regions.end());

@@ -42,14 +42,6 @@ TEST(DualTree, BinaryTreePrimitives) {
 
     DualTreeTopology topology(0, exampleA);
 
-    EXPECT_EQ(topology.get_reduction_partner(0, 2), TC(4, 2));
-    EXPECT_EQ(topology.get_reduction_partner(4, 0), TC(5, 0));
-    EXPECT_EQ(topology.get_reduction_partner(4, 1), TC(6, 1));
-    EXPECT_EQ(topology.get_reduction_partner(9, 0), TC(8, 0));
-    EXPECT_EQ(topology.get_reduction_partner(10, 0), TC(8, 1));
-    EXPECT_EQ(topology.get_reduction_partner(10, 1), TC(8, 1));
-
-
     EXPECT_EQ(topology.max_y(0, global_size), 4);
     EXPECT_EQ(topology.max_y(1, global_size), 0);
     EXPECT_EQ(topology.max_y(2, global_size), 1);
@@ -445,3 +437,5 @@ TEST(DualTree, DifficultDistributions) {
     }
 }
 
+TEST(DualTree, Statistics) {
+}
