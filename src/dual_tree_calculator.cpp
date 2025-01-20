@@ -1,7 +1,8 @@
 #include <dual_tree_topology.hpp>
 #include <vector>
 
-vector<operation_result> compute_operations_per_rank(const uint64_t n, const uint64_t p, const unsigned int m) {
+pair<vector<operation_result>, vector<DualTreeTopology>> compute_operations_per_rank(const uint64_t n, const uint64_t p,
+                                                                                     const unsigned int m) {
     vector<operation_result> result;
     result.reserve(p);
 
@@ -27,16 +28,26 @@ vector<operation_result> compute_operations_per_rank(const uint64_t n, const uin
         result.emplace_back(topologies[rank].compute_operations(incoming_coords));
     }
 
-    return result;
+    return std::make_pair(result, topologies);
 }
 
 
 int main(int argc, char **argv) {
-    do {
+    while (!std::cin.eof()) {
         uint64_t n, p, m;
-        std::cin >> n >> p >> m;
+        std::cin >> n;
+        if (std::cin.fail())
+            return 2;
 
-        auto result = compute_operations_per_rank(n, p, m);
+        std::cin >> p;
+        if (std::cin.fail())
+            return 2;
+
+        std::cin >> m;
+        if (std::cin.fail())
+            return 2;
+
+        auto [result, topologies] = compute_operations_per_rank(n, p, m);
 
         printf("[\n");
         for (auto rank = 0U; rank < p; ++rank) {
@@ -45,7 +56,10 @@ int main(int argc, char **argv) {
                 local_elements += DualTreeTopology::pow2(y);
             }
 
-            printf("{\"rank\":%u, \"n_ops\":%zu, \"n_local_elements\":%zu, \"local_elements\": [", rank,
+
+            printf("{\"rank\":%u, \"comm_parent\": %zu, \"n_outgoing\": %zu, \"n_ops\":%zu, \"n_local_elements\":%zu, "
+                   "\"local_elements\": [",
+                   rank, topologies[rank].get_comm_parent(), topologies[rank].get_outgoing().size(),
                    result[rank].ops.size(), local_elements);
 
             auto i = 0UL;
@@ -61,7 +75,6 @@ int main(int argc, char **argv) {
 
             printf("\"}%s\n", rank < p - 1 ? ", " : "");
         }
-        printf("]\n");
-
-    } while (!std::cin.eof());
+        printf("]\n\n");
+    }
 }
