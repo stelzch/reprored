@@ -34,7 +34,6 @@ target_sources(binarytreesummation
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
 target_compile_options(binarytreesummation PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic)
-target_link_libraries(binarytreesummation PUBLIC -ltbb)
 
 target_compile_definitions(binarytreesummation PRIVATE $<$<CONFIG:DEBUG>:DEBUG_TRACE>)
 
