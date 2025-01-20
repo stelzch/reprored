@@ -54,7 +54,8 @@ target_include_directories(binarytreesummation
 )
 
 target_link_directories(binarytreesummation PUBLIC ${reproblas_LIBRARY_DIRS})
-target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES})
+find_package(TBB)
+target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES} $<$<TARGET_EXISTS:TBB::tbb>:TBB::tbb>)
 target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
 target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 
