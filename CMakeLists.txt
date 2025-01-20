@@ -38,6 +38,7 @@ target_link_libraries(binarytreesummation PUBLIC -ltbb)
 
 target_compile_definitions(binarytreesummation PRIVATE $<$<CONFIG:DEBUG>:DEBUG_TRACE>)
 
+
 if (USE_GPROF)
     target_compile_options(binarytreesummation PRIVATE -pg)
 endif ()
@@ -57,6 +58,13 @@ target_link_directories(binarytreesummation PUBLIC ${reproblas_LIBRARY_DIRS})
 target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES})
 target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
 target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
+
+add_executable(dualtreecalculator src/dual_tree_calculator.cpp)
+target_link_libraries(dualtreecalculator PRIVATE binarytreesummation)
+target_include_directories(dualtreecalculator
+        PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
 
 if (USE_SCOREP)
     target_compile_definitions(binarytreesummation PRIVATE -DSCOREP)
