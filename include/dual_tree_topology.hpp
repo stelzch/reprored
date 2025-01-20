@@ -149,7 +149,6 @@ public:
             return x >= local_start_index && x < local_end_index;
         }
     }
-    bool is_subtree_local(const TreeCoordinates &coords) const { return is_subtree_local(coords.first, coords.second); }
 
     bool is_subtree_comm_local(const uint64_t x, const int32_t y) const {
         if (y > 0) {
