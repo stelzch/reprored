@@ -23,7 +23,7 @@ public:
      */
     MAryTree(const uint64_t n, const unsigned int m) :
         n{n}, m{m} {
-        assert(m > 0);
+        assert(m > 1);
     }
 
     /// Logarithm to base m \f$\log_m(x)\f$
