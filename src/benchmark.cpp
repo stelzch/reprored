@@ -28,9 +28,9 @@ constexpr auto MAX_MESSAGE_SIZE_DOUBLES = MAX_MESSAGE_SIZE_BYTES / 8;
 
 void print_usage(char *program_name) {
     fprintf(stderr,
-            "Usage: %s n,p,k,r n,p,k,r,...\n\twhere\n\t\tn = length of "
+            "Usage: %s n,p,k,r[,m] n,p,k,r,...\n\twhere\n\t\tn = length of "
             "array\n\t\tp = cluster size\n\t\tk = linear sum parameter\n\t\tr = "
-            "number of repetitions\n",
+            "number of repetitions\n\t\tm = tree parameter\n",
             program_name);
 }
 
@@ -39,9 +39,10 @@ struct TestConfig {
     uint64_t p;
     uint64_t k;
     uint64_t r;
+    uint64_t m;
 
-    TestConfig(uint64_t n, uint64_t p, uint64_t k, uint64_t r) :
-        n{n}, p{p}, k{k}, r{r} {}
+    TestConfig(uint64_t n, uint64_t p, uint64_t k, uint64_t r, uint64_t m = 2) :
+        n{n}, p{p}, k{k}, r{r}, m{m} {}
 };
 
 struct BenchmarkIteration {
@@ -52,8 +53,8 @@ struct BenchmarkIteration {
 
 void print_result(const TestConfig &config, const BenchmarkIteration &it, const char *variant) {
     const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(it.duration);
-    printf("%zu,%zu,%zu,%s,%zu,%zu,%.50f\n", config.n, config.p, config.k, variant, it.iteration, duration.count(),
-           it.result);
+    printf("%zu,%zu,%zu,%zu,%s,%zu,%zu,%.50f\n", config.n, config.p, config.k, config.m, variant, it.iteration,
+           duration.count(), it.result);
 }
 
 template<typename F, typename G>
@@ -76,7 +77,7 @@ vector<BenchmarkIteration> measure(F prepare, G run, uint64_t repetitions) {
 
 vector<TestConfig> collect_arguments(int argc, char **argv) {
     vector<TestConfig> configs;
-    std::regex pattern(R"((\d+),(\d+),(\d+),(\d+))");
+    std::regex pattern(R"((\d+),(\d+),(\d+),(\d+)(?:,(\d+))?)");
     std::cmatch match;
 
     for (int i = 0; i < argc; ++i) {
@@ -88,8 +89,9 @@ vector<TestConfig> collect_arguments(int argc, char **argv) {
         const auto p = std::stoul(match[2].str());
         const auto k = std::stoul(match[3].str());
         const auto r = std::stoul(match[4].str());
+        const auto m = match[5].matched ? std::stoul(match[5].str()) : 2;
 
-        configs.emplace_back(n, p, k, r);
+        configs.emplace_back(n, p, k, r, m);
     }
 
     return configs;
@@ -128,7 +130,7 @@ int main(int argc, char **argv) {
     const auto seed = 42;
 
     if (rank == 0) {
-        printf("n,p,k,variant,i,time,result\n");
+        printf("n,p,k,m,variant,i,time,result\n");
     }
 
     for (auto config: configs) {
@@ -204,7 +206,7 @@ int main(int argc, char **argv) {
 #ifdef SCOREP
             SCOREP_USER_REGION_BEGIN(region_dts, "dualtreesummation", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
-            DualTreeSummation dual_tree_summation(rank, regions, comm);
+            DualTreeSummation dual_tree_summation(rank, regions, comm, config.m);
 
             const auto results = measure(
                     [&dual_tree_summation, &local_array, &distribution, &rank]() {
