@@ -314,7 +314,7 @@ TEST(DualTree, Fuzzer) {
                                 distribution.send_counts.at(full_comm_rank), dts.getBuffer());
 
                     double result = dts.accumulate();
-                    EXPECT_EQ(result, reference_result)
+                    ASSERT_EQ(result, reference_result)
                             << "Expected result to be the same as with p=1 " << reference_result
                             << " but new_result is " << result << ", difference is " << (reference_result - result)
                             << " on rank " << full_comm_rank;
