@@ -1,6 +1,7 @@
 #ifndef BINARY_TREE_SUMMATION_H_
 #define BINARY_TREE_SUMMATION_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -9,7 +10,9 @@ extern "C" {
 
 /* This header file exposes functions for binary tree summation for use in C programs */
 
-typedef void * ReductionContext;
+typedef void *ReductionContext;
+void attach_debugger(bool condition);
+void attach_debugger_env();
 
 
 /* TODO: remove void * type and replace with MPI_Comm. Requires MPI inclusion in every source file that includes
@@ -25,6 +28,9 @@ double *get_reduction_buffer(ReductionContext ctx);
 void free_reduction_context(ReductionContext);
 const char *get_reproducible_reduction_mode();
 uint64_t get_reproducible_reduction_counter();
+
+const char *get_reproducible_reduction_mode();
+
 
 #ifdef __cplusplus
 }

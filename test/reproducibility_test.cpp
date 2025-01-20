@@ -1,19 +1,20 @@
-#include <mpi.h>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <kassert/kassert.hpp>
 #include <binary_tree_summation.hpp>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <kassert/kassert.hpp>
 #include <kgather_summation.hpp>
+#include <mpi.h>
 
 // Test adapted from KaMPI-NG.
-// See https://github.com/kamping-site/kamping/blob/a3c61e335537291bf1af52258cc19bad445a7cd7/tests/plugins/reproducible_reduce.cpp
+// See
+// https://github.com/kamping-site/kamping/blob/a3c61e335537291bf1af52258cc19bad445a7cd7/tests/plugins/reproducible_reduce.cpp
 
 
 #include <chrono>
 #include <cmath>
 #include <random>
-#include <vector>
 #include <util.hpp>
+#include <vector>
 
 
 // Test generators
@@ -34,7 +35,7 @@ TEST(ReproducibleReduceTest, DistributionGeneration) {
 
 constexpr double const epsilon = std::numeric_limits<double>::epsilon();
 TEST(ReproducibleReduceTest, SimpleSum) {
-    constexpr int                                                                 comm_size = 2;
+    constexpr int comm_size = 2;
     int actual_comm_size, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &actual_comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -66,36 +67,12 @@ TEST(ReproducibleReduceTest, SimpleSum) {
     MPI_Comm_free(&comm);
 }
 
-template <typename F>
-void with_comm_size_n(
-    MPI_Comm& comm, size_t comm_size, F f
-) {
-    int full_comm_size, full_comm_rank;
-    MPI_Comm_size(comm, &full_comm_size);
-    MPI_Comm_rank(comm, &full_comm_rank);
-    assert(full_comm_size >= comm_size);
-
-    int  rank_active = full_comm_rank < comm_size;
-    MPI_Comm new_comm;
-    MPI_Comm_split(comm, rank_active, 0, &new_comm);
-
-    int new_rank;
-    int new_comm_size;
-    MPI_Comm_rank(new_comm, &new_rank);
-    MPI_Comm_size(new_comm, &new_comm_size);
-
-    if (rank_active) {
-        f(new_comm, new_rank, new_comm_size);
-    }
-
-    MPI_Comm_free(&new_comm);
-}
 
 TEST(ReproducibleReduceTest, WorksWithNonzeroRoot) {
 
     auto full_comm = MPI_COMM_WORLD;
     std::vector<double> array{1.0, 2.0, 3.0, 4.0};
-    Distribution        distribution({2, 2}, {2, 0});
+    Distribution distribution({2, 2}, {2, 0});
 
     with_comm_size_n(full_comm, 2, [&distribution, &array](auto comm, auto rank, auto _) {
         BinaryTreeSummation bts(rank, regions_from_distribution(distribution), 8, comm);
@@ -111,20 +88,20 @@ TEST(ReproducibleReduceTest, WorksWithNonzeroRoot) {
 }
 
 TEST(ReproducibleReduceTest, OtherExample) {
-   /*
-    *           ▼        ▼        ▼  
-    * ┌────────┬──┬──┬──────────────┐
-    * │  p2    │p0│p3│     p1       │
-    * └────────┴──┴──┴──────────────┘
-    *  0  1  2  3  4  5  6  7  8  9
-    *
-    */
+    /*
+     *           ▼        ▼        ▼
+     * ┌────────┬──┬──┬──────────────┐
+     * │  p2    │p0│p3│     p1       │
+     * └────────┴──┴──┴──────────────┘
+     *  0  1  2  3  4  5  6  7  8  9
+     *
+     */
     auto full_comm = MPI_COMM_WORLD;
-    Distribution        distribution({1, 5, 3, 1}, {3, 5, 0, 4});
+    Distribution distribution({1, 5, 3, 1}, {3, 5, 0, 4});
     const auto array = generate_test_vector(10, 42);
     const auto K = 3;
 
-    with_comm_size_n(full_comm, 4, [&distribution, &array, &K] (auto comm, auto rank, auto _) {
+    with_comm_size_n(full_comm, 4, [&distribution, &array, &K](auto comm, auto rank, auto _) {
         BinaryTreeSummation bts(rank, regions_from_distribution(distribution), K);
 
         auto local_array = scatter_array(comm, array, distribution);
@@ -147,13 +124,13 @@ TEST(ReproducibleReduceTest, Fuzzing) {
 
     ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS        = 20000; // 15;
-    constexpr auto NUM_KS            = 20;
+    constexpr auto NUM_ARRAYS = 20000; // 15;
+    constexpr auto NUM_KS = 20;
     constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
-    unsigned long      seed;
+    unsigned long seed;
 
     if (full_comm_rank == 0) {
         seed = rd();
@@ -163,14 +140,14 @@ TEST(ReproducibleReduceTest, Fuzzing) {
     std::uniform_int_distribution<size_t> array_length_distribution(1, 20);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
     std::uniform_int_distribution<size_t> k_distribution(1, 24);
-    std::mt19937                          rng(seed);       // RNG for distribution & rank number
-    std::mt19937                          rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
+    std::mt19937 rng(seed); // RNG for distribution & rank number
+    std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
 
     auto checks = 0UL;
 
     for (auto i = 0U; i < NUM_ARRAYS; ++i) {
         std::vector<double> data_array;
-        size_t const        data_array_size = array_length_distribution(rng);
+        size_t const data_array_size = array_length_distribution(rng);
         if (full_comm_rank == 0) {
             data_array = generate_test_vector(data_array_size, rng_root());
         }
@@ -194,7 +171,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
             MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
             for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
-                auto const ranks        = rank_distribution(rng);
+                auto const ranks = rank_distribution(rng);
                 auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
                 if (full_comm_rank == 0) {
@@ -205,24 +182,26 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                     printf("\n");
                 }
 
-                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &comm, &k](auto comm_, auto rank, auto size) {
-                    MPI_Barrier(comm_);
-                    int comm_size;
-                    MPI_Comm_size(comm_, &comm_size);
-                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
-                    ASSERT_EQ(distribution.displs.size(), comm_size);
-                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
+                with_comm_size_n(comm, ranks,
+                                 [&distribution, &data_array, &reference_result, &checks, &ranks, &comm,
+                                  &k](auto comm_, auto rank, auto size) {
+                                     MPI_Barrier(comm_);
+                                     int comm_size;
+                                     MPI_Comm_size(comm_, &comm_size);
+                                     ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                                     ASSERT_EQ(distribution.displs.size(), comm_size);
+                                     ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                    BinaryTreeSummation bts(rank, regions_from_distribution(distribution), k, comm_);
+                                     BinaryTreeSummation bts(rank, regions_from_distribution(distribution), k, comm_);
 
-                    std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
-                    memcpy(bts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                                     std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
+                                     memcpy(bts.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
-                    double computed_result = bts.accumulate();
+                                     double computed_result = bts.accumulate();
 
-                    EXPECT_EQ(computed_result, reference_result);
-                    ++checks;
-                });
+                                     EXPECT_EQ(computed_result, reference_result);
+                                     ++checks;
+                                 });
             }
         }
     }
@@ -243,13 +222,13 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
 
     ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS        = 20000; // 15;
-    constexpr auto NUM_KS            = 20;
+    constexpr auto NUM_ARRAYS = 20000; // 15;
+    constexpr auto NUM_KS = 20;
     constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
-    unsigned long      seed;
+    unsigned long seed;
 
     if (full_comm_rank == 0) {
         seed = rd();
@@ -259,14 +238,14 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
     std::uniform_int_distribution<size_t> array_length_distribution(1, 20);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
     std::uniform_int_distribution<size_t> k_distribution(1, 24);
-    std::mt19937                          rng(seed);       // RNG for distribution & rank number
-    std::mt19937                          rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
+    std::mt19937 rng(seed); // RNG for distribution & rank number
+    std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
 
     auto checks = 0UL;
 
     for (auto i = 0U; i < NUM_ARRAYS; ++i) {
         std::vector<double> data_array;
-        size_t const        data_array_size = array_length_distribution(rng);
+        size_t const data_array_size = array_length_distribution(rng);
         if (full_comm_rank == 0) {
             data_array = generate_test_vector(data_array_size, rng_root());
         }
@@ -290,7 +269,7 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
             MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
             for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
-                auto const ranks        = rank_distribution(rng);
+                auto const ranks = rank_distribution(rng);
                 auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
                 if (full_comm_rank == 0) {
@@ -301,24 +280,26 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
                     printf("\n");
                 }
 
-                with_comm_size_n(comm, ranks, [&distribution, &data_array, &reference_result, &checks, &ranks, &comm, &k](auto comm_, auto rank, auto size) {
-                    MPI_Barrier(comm_);
-                    int comm_size;
-                    MPI_Comm_size(comm_, &comm_size);
-                    ASSERT_EQ(static_cast<int>(ranks), comm_size);
-                    ASSERT_EQ(distribution.displs.size(), comm_size);
-                    ASSERT_EQ(distribution.send_counts.size(), comm_size);
+                with_comm_size_n(comm, ranks,
+                                 [&distribution, &data_array, &reference_result, &checks, &ranks, &comm,
+                                  &k](auto comm_, auto rank, auto size) {
+                                     MPI_Barrier(comm_);
+                                     int comm_size;
+                                     MPI_Comm_size(comm_, &comm_size);
+                                     ASSERT_EQ(static_cast<int>(ranks), comm_size);
+                                     ASSERT_EQ(distribution.displs.size(), comm_size);
+                                     ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                    KGatherSummation kgs(rank, regions_from_distribution(distribution), k, comm_);
+                                     KGatherSummation kgs(rank, regions_from_distribution(distribution), k, comm_);
 
-                    std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
-                    memcpy(kgs.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
+                                     std::vector<double> local_arr = scatter_array(comm_, data_array, distribution);
+                                     memcpy(kgs.getBuffer(), local_arr.data(), local_arr.size() * sizeof(double));
 
-                    double computed_result = kgs.accumulate();
+                                     double computed_result = kgs.accumulate();
 
-                    EXPECT_EQ(computed_result, reference_result);
-                    ++checks;
-                });
+                                     EXPECT_EQ(computed_result, reference_result);
+                                     ++checks;
+                                 });
             }
         }
     }
