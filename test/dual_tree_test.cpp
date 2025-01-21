@@ -247,6 +247,7 @@ TEST(DualTree, Fuzzer) {
 
     std::uniform_int_distribution<size_t> array_length_distribution(1, 500);
     std::uniform_int_distribution<size_t> rank_distribution(1, full_comm_size);
+    std::uniform_int_distribution<unsigned int> m_distribution(2, full_comm_size);
     std::mt19937 rng(seed); // RNG for distribution & rank number
     std::mt19937 rng_root(rng()); // RNG for data generation (out-of-sync with other ranks)
 
@@ -284,8 +285,10 @@ TEST(DualTree, Fuzzer) {
             auto const ranks = rank_distribution(rng);
             auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
+            auto m = m_distribution(rng);
+
             if (full_comm_rank == 0) {
-                printf("n=%zu, p=%zu, distribution={", data_array_size, ranks);
+                printf("n=%zu, p=%zu, m=%u, distribution={", data_array_size, ranks, m);
                 for (auto i = 0; i < ranks; ++i) {
                     printf("{%i, %i}", distribution.displs[i], distribution.send_counts[i]);
                     const bool last_element = i == ranks - 1;
@@ -308,7 +311,8 @@ TEST(DualTree, Fuzzer) {
                     ASSERT_EQ(distribution.displs.size(), comm_size);
                     ASSERT_EQ(distribution.send_counts.size(), comm_size);
 
-                    DualTreeSummation dts(full_comm_rank, regions_from_distribution(distribution), new_comm);
+
+                    DualTreeSummation dts(full_comm_rank, regions_from_distribution(distribution), new_comm, m);
 
                     std::copy_n(data_array.begin() + distribution.displs.at(full_comm_rank),
                                 distribution.send_counts.at(full_comm_rank), dts.getBuffer());
