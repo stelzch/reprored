@@ -160,6 +160,7 @@ int main(int argc, char **argv) {
         SCOREP_USER_PARAMETER_UINT64("n", config.n);
         SCOREP_USER_PARAMETER_UINT64("p", config.p);
         SCOREP_USER_PARAMETER_UINT64("k", config.k);
+        SCOREP_USER_PARAMETER_UINT64("m", config.m);
 #endif
 
         {
