@@ -131,18 +131,15 @@ double DualTreeSummation::accumulate() {
     // 2. Reduce all fully local subtrees
     local_accumulate_into_inbox();
 
-    // 3. Wait until all values from child nodes have been received
-    await_receive_requests();
-
-    // 4. Compute values
+    // 3. Compute values
     execute_operations();
 
-    // 5. Send out computed values
+    // 4. Send out computed values
     if (!is_root) {
         send_outgoing_values();
     }
 
-    // 6. Broadcast global value
+    // 5. Broadcast global value
     return broadcast_result();
 }
 
@@ -212,21 +209,24 @@ void DualTreeSummation::trigger_receive_requests() {
     }
 }
 
-void DualTreeSummation::await_receive_requests() {
-    if (requests.size() > 0) {
-        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
-    }
-}
-
 void DualTreeSummation::execute_operations() {
     stack.clear();
 
-    auto it = inbox.begin();
+    auto inbox_index = 0U; /// points into inbox, keeps track which element we need to push onto the stack next
+    auto next_pending_index =
+            operations.local_coords
+                    .size(); /// Keeps track of the lowest inbox index whose message might still be inflight
+    auto request_index = 0U; /// Index of next request we must wait upon
 
     for (const auto op: operations.ops) {
         if (op == OPERATION_PUSH) {
-            stack.push_back(*it);
-            ++it;
+            if (inbox_index >= next_pending_index) {
+                MPI_Wait(&requests[request_index], MPI_STATUSES_IGNORE);
+                next_pending_index += incoming_element_count[request_index];
+                ++request_index;
+            }
+
+            stack.push_back(inbox[inbox_index++]);
         } else {
 #ifdef DEBUG_TRACE
             assert(op == OPERATION_REDUCE);
@@ -242,6 +242,7 @@ void DualTreeSummation::execute_operations() {
         }
     }
 
+    assert(request_index == requests.size());
     assert(stack.size() == topology.get_outgoing().size());
 }
 

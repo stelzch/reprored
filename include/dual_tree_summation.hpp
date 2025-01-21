@@ -50,7 +50,6 @@ private:
     void send_outgoing_coordinates(MPI_Comm comm) const;
     unsigned long compute_maximum_stack_size() const;
     double local_accumulate(uint64_t x, uint32_t y);
-    void await_receive_requests();
     void local_accumulate_into_inbox();
     void execute_operations();
     void trigger_receive_requests();
