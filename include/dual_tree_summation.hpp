@@ -50,9 +50,10 @@ private:
     void send_outgoing_coordinates(MPI_Comm comm) const;
     unsigned long compute_maximum_stack_size() const;
     double local_accumulate(uint64_t x, uint32_t y);
+    void await_receive_requests();
     void local_accumulate_into_inbox();
     void execute_operations();
-    void receive_values_into_inbox();
+    void trigger_receive_requests();
     double broadcast_result() const;
     void send_outgoing_values() const;
     inline auto array_to_rank_order(const int rank) const { return rank_order[rank]; }
@@ -134,4 +135,7 @@ private:
 
     const int rank_of_comm_parent;
     const bool is_root;
+
+
+    vector<MPI_Request> requests;
 };

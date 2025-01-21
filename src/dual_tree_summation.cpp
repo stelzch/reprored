@@ -22,7 +22,8 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
     inverse_rank_order{compute_inverse_rank_order(rank_order)},
     topology{rank_to_array_order(static_cast<int>(rank)), compute_permuted_regions(regions), m},
     rank_of_comm_parent(rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.get_comm_parent())),
-    is_root(rank_to_array_order(DualTreeSummation::rank) == 0) {
+    is_root(rank_to_array_order(DualTreeSummation::rank) == 0),
+    requests(topology.get_comm_children().size()) {
 
     accumulation_buffer.resize(topology.get_local_size());
 
@@ -41,7 +42,7 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
 
 
     stack.reserve(compute_maximum_stack_size());
-    inbox.reserve(operations.local_coords.size() + incoming_coordinates.size());
+    inbox.resize(operations.local_coords.size() + incoming_coordinates.size());
 
 #ifdef DEBUG_TRACE
     printf("rank %lu (permuted %i) region %zu-%zu max_stack_size %zu inbox capacity %zu incoming ", rank,
@@ -124,29 +125,31 @@ uint64_t DualTreeSummation::getBufferSize() const { return accumulation_buffer.s
 void DualTreeSummation::storeSummand(uint64_t localIndex, double val) { accumulation_buffer[localIndex] = val; }
 
 double DualTreeSummation::accumulate() {
-    inbox.clear();
+    // 1. Trigger receive for values from child nodes
+    trigger_receive_requests();
 
-    // 1. Reduce all fully local subtrees
+    // 2. Reduce all fully local subtrees
     local_accumulate_into_inbox();
 
-    // 2. Receive all values from child nodes
-    receive_values_into_inbox();
+    // 3. Wait until all values from child nodes have been received
+    await_receive_requests();
 
-    // 3. Compute values
+    // 4. Compute values
     execute_operations();
 
-    // 4. Send out computed values
+    // 5. Send out computed values
     if (!is_root) {
         send_outgoing_values();
     }
 
-    // 4. Broadcast global value
+    // 6. Broadcast global value
     return broadcast_result();
 }
 
 void DualTreeSummation::local_accumulate_into_inbox() {
+    size_t i = 0;
     for (auto &[x, y]: operations.local_coords) {
-        inbox.push_back(local_accumulate(x, y));
+        inbox[i++] = local_accumulate(x, y);
     }
 }
 
@@ -194,18 +197,24 @@ double DualTreeSummation::local_accumulate(uint64_t x, uint32_t maxY) {
     return buffer[0];
 }
 
-void DualTreeSummation::receive_values_into_inbox() {
-    for (auto i = 0U; i < topology.get_comm_children().size(); ++i) {
-        const uint64_t count = incoming_element_count[i];
+void DualTreeSummation::trigger_receive_requests() {
+    size_t i = operations.local_coords.size();
 
-        const auto permuted_child_rank = topology.get_comm_children()[i];
+    for (auto c = 0U; c < topology.get_comm_children().size(); ++c) {
+        const uint64_t count = incoming_element_count[c];
+
+        const auto permuted_child_rank = topology.get_comm_children()[c];
         const auto child_rank = array_to_rank_order(permuted_child_rank);
 
-        // Insert elements at the end of the inbox
-        const auto buf_start_index = inbox.size();
-        inbox.resize(inbox.size() + count);
+        MPI_Irecv(&inbox[i], count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, &requests[c]);
 
-        MPI_Recv(&inbox[buf_start_index], count, MPI_DOUBLE, child_rank, TRANSFER_MSG_TAG, comm, MPI_STATUS_IGNORE);
+        i += count;
+    }
+}
+
+void DualTreeSummation::await_receive_requests() {
+    if (requests.size() > 0) {
+        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
     }
 }
 
@@ -219,8 +228,10 @@ void DualTreeSummation::execute_operations() {
             stack.push_back(*it);
             ++it;
         } else {
+#ifdef DEBUG_TRACE
             assert(op == OPERATION_REDUCE);
             assert(stack.size() >= 2);
+#endif
 
             const double b = stack.back();
             stack.pop_back();

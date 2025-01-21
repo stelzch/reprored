@@ -18,8 +18,8 @@ using TreeCoordinates = pair<uint64_t, uint32_t>; // x and y coordinate
 
 
 typedef bool operation;
-constexpr auto OPERATION_PUSH = true; /// Consume value from available intermediate results and push onto working stack
-constexpr auto OPERATION_REDUCE = false; /// Reduce & consume two top-most values from working stack and push result
+constexpr bool OPERATION_PUSH = true; /// Consume value from available intermediate results and push onto working stack
+constexpr bool OPERATION_REDUCE = false; /// Reduce & consume two top-most values from working stack and push result
 
 /**
  * Defines operations to be performed on a given rank.

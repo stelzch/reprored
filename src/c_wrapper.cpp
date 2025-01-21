@@ -229,6 +229,4 @@ void attach_debugger_env() {
 
 const char *get_reproducible_reduction_mode() { return reduction_mode_string.c_str(); }
 
-uint64_t get_reproducible_reduction_counter() {
-    return reduction_counter;
-}
+uint64_t get_reproducible_reduction_counter() { return reduction_counter; }
