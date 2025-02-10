@@ -13,8 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(MPI REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(reproblas REQUIRED IMPORTED_TARGET reproblas)
-
+add_subdirectory(libs/reproblas)
 
 option(USE_SCOREP "Enable instrumentation with ScoreP" OFF)
 option(ENABLE_LTO "Enable link-time-optimizations" OFF)
@@ -53,11 +52,12 @@ target_include_directories(binarytreesummation
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_directories(binarytreesummation PUBLIC ${reproblas_LIBRARY_DIRS})
 find_package(TBB)
-target_link_libraries(binarytreesummation PUBLIC MPI::MPI_C MPI::MPI_CXX ${reproblas_LIBRARIES} $<$<TARGET_EXISTS:TBB::tbb>:TBB::tbb>)
-target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
-target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
+target_link_libraries(binarytreesummation
+    PUBLIC MPI::MPI_C MPI::MPI_CXX $<$<TARGET_EXISTS:TBB::tbb>:TBB::tbb>
+    ReproBLAS)
+#target_include_directories(binarytreesummation PUBLIC ${reproblas_INCLUDE_DIRS})
+#target_compile_options(binarytreesummation PUBLIC ${reproblas_CFLAGS_OTHER})
 
 add_executable(dualtreecalculator src/dual_tree_calculator.cpp)
 target_link_libraries(dualtreecalculator PRIVATE binarytreesummation)
