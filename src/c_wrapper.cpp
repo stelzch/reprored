@@ -17,10 +17,12 @@ uint64_t reduction_counter = 0;
 enum class ReductionMode { ALLREDUCE, REPROBLAS, BINARY_TREE, KGATHER, DUAL_TREE };
 ReductionMode env2mode();
 uint64_t env2k();
+uint64_t env2m();
 
 // Load parameters from environment variables
-ReductionMode global_reduction_mode = env2mode();
-uint64_t global_k = env2k();
+const ReductionMode global_reduction_mode = env2mode();
+const uint64_t global_k = env2k();
+const uint64_t global_m = env2m();
 
 std::string reduction_mode_to_string(ReductionMode rm) {
     switch (rm) {
@@ -39,8 +41,8 @@ std::string reduction_mode_to_string(ReductionMode rm) {
     }
 }
 
-std::string reduction_mode_string =
-        reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k);
+const std::string reduction_mode_string =
+        reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k) + ", M=" + std::to_string(global_m);
 
 void set_default_reduction_context_communicator(intptr_t communicator) {
     MPI_Comm comm = (MPI_Comm) (communicator);
@@ -89,6 +91,20 @@ uint64_t env2k() {
 
     return k;
 }
+uint64_t env2m() {
+    const char *m_env = getenv("REPR_REDUCE_M");
+    if (m_env == nullptr) {
+        return 2;
+    }
+
+    const auto m = std::stoul(std::string(m_env));
+
+    if (m < 1) {
+        throw std::runtime_error("Invalid choice of m in environment variable REPR_REDUCE_M");
+    }
+
+    return m;
+}
 
 
 ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_summands, intptr_t communicator, int k) {
@@ -118,7 +134,7 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
             std::vector<region> regions(size, r);
 
             MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region), MPI_BYTE, comm);
-            return new DualTreeSummation(rank, std::move(regions), comm);
+            return new DualTreeSummation(rank, std::move(regions), comm, global_m);
         }
         case ReductionMode::KGATHER: {
             region r;
