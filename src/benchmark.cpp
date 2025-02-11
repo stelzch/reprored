@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
         SCOREP_USER_PARAMETER_UINT64("m", config.m);
 #endif
 
-        {
+        if (false) {
             BinaryTreeSummation bts(rank, regions, config.k, comm);
 
 #ifdef SCOREP
@@ -284,7 +284,8 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        {
+
+        if (false) {
             AllreduceSummation ars(comm, regions[rank].size, AllreduceType::VECTORIZED_ALLREDUCE);
 
             memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
