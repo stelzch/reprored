@@ -138,8 +138,10 @@ int main(int argc, char **argv) {
         MPI_Comm comm;
         MPI_Comm_split(MPI_COMM_WORLD, participating, 0, &comm);
 
-        if (!participating)
+        if (!participating) {
+            MPI_Comm_free(&comm);
             continue;
+        }
 
         int new_rank, new_size;
         MPI_Comm_rank(comm, &new_rank);
