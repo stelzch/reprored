@@ -16,13 +16,14 @@ using std::vector;
 
 class ReproblasSummation : public Summation {
 public:
-  ReproblasSummation(MPI_Comm comm, size_t local_summands);
+  ReproblasSummation(MPI_Comm comm, size_t local_summands, bool allreduce = true);
   virtual ~ReproblasSummation();
 
   double *getBuffer() override;
   double accumulate() override;
 
 private:
+  bool allreduce;
   const size_t local_summands;
   int rank;
   MPI_Comm comm;

@@ -31,7 +31,9 @@ constexpr auto MAX_MESSAGE_SIZE_DOUBLES = MAX_MESSAGE_SIZE_BYTES / 8;
 
 void print_usage(char *program_name) {
     fprintf(stderr,
-            "Usage: %s n,p,k,r[,m] n,p,k,r,...\n\twhere\n\t\tn = length of "
+            "Usage: %s variants n,p,k,r[,m] n,p,k,r,...\n\twhere\n"
+            "\t\tvariants = comma separated list of reduction algorithms\n"
+            "\t\tn = length of "
             "array\n\t\tp = cluster size\n\t\tk = linear sum parameter\n\t\tr = "
             "number of repetitions\n\t\tm = tree parameter\n\nUse - as first parameter to pass n,p,k,r tuples over stdin instead. Empty line starts benchmark.\n",
             program_name);
@@ -133,6 +135,10 @@ vector<TestConfig> collect_arguments_stdin() {
     return configs;
 }
 
+bool is_variant_enabled(const std::string &variant_spec, const std::string &variant_name) {
+    return variant_spec.find(variant_name) != std::string::npos;
+}
+
 int main(int argc, char **argv) {
 #ifdef SCOREP
     SCOREP_USER_REGION_DEFINE(region_benchmark_loop);
@@ -156,13 +162,15 @@ int main(int argc, char **argv) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    if (argc == 1) {
+    if (argc < 3) {
         print_usage(argv[0]);
         return -1;
     }
 
+    std::string variants = std::string(" ") + argv[1] + " ";
+
     vector<TestConfig> configs;
-    if (std::strcmp(argv[1], "-") == 0) {
+    if (std::strcmp(argv[2], "-") == 0) {
         if (rank == 0) {
             configs = collect_arguments_stdin();
         }
@@ -218,7 +226,7 @@ int main(int argc, char **argv) {
         SCOREP_USER_PARAMETER_UINT64("m", config.m);
 #endif
 
-        if (false) {
+        if (is_variant_enabled(variants, " bts ")) {
             BinaryTreeSummation bts(rank, regions, config.k, comm);
 
 #ifdef SCOREP
@@ -238,8 +246,9 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        {
-            ReproblasSummation reproblas(comm, regions[rank].size);
+        
+        if (is_variant_enabled(variants, " reproblas ")) {
+            ReproblasSummation reproblas(comm, regions[rank].size, true);
 
             memcpy(reproblas.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 #ifdef SCOREP
@@ -258,7 +267,27 @@ int main(int argc, char **argv) {
             }
         }
 
-        {
+        if (is_variant_enabled(variants, " reproblas_bcast ")) {
+            ReproblasSummation reproblas(comm, regions[rank].size, false);
+
+            memcpy(reproblas.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+#ifdef SCOREP
+            SCOREP_USER_REGION_BEGIN(region_reproblas, "reproblas", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+
+            const auto results = measure([]() {}, [&reproblas]() { return reproblas.accumulate(); }, config.r);
+
+#ifdef SCOREP
+            SCOREP_USER_REGION_END(region_reproblas);
+#endif
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "reproblas_bcast");
+                }
+            }
+        }
+
+        if (is_variant_enabled(variants, " dts ")) {
 #ifdef SCOREP
             SCOREP_USER_REGION_BEGIN(region_dts, "dualtreesummation", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
@@ -283,7 +312,7 @@ int main(int argc, char **argv) {
 #endif
         }
 
-        if (config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
+        if (is_variant_enabled(variants, " kgather ") && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
             KGatherSummation kgs(rank, regions, config.k, comm);
 
             memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
@@ -307,7 +336,31 @@ int main(int argc, char **argv) {
             }
         }
 
-        {
+        if (is_variant_enabled(variants, " kallgather ") && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
+            KGatherSummation kgs(rank, regions, config.k, true, comm);
+
+            memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+
+#ifdef SCOREP
+            SCOREP_USER_REGION_BEGIN(region_kgather, "kallgather", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+            const auto results = measure(
+                    [&kgs, &local_array, &distribution, &rank]() {
+                        memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+                    },
+                    [&kgs]() { return kgs.accumulate(); }, config.r);
+#if SCOREP
+            SCOREP_USER_REGION_END(region_kgather);
+#endif
+
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "kallgather");
+                }
+            }
+        }
+
+        if (is_variant_enabled(variants, " reduce_bcast ") ) {
             AllreduceSummation ars(comm, regions[rank].size, AllreduceType::REDUCE_AND_BCAST);
 
             memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
@@ -326,7 +379,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        {
+        if (is_variant_enabled(variants, " allreduce ")) {
             AllreduceSummation ars(comm, regions[rank].size, AllreduceType::ALLREDUCE);
 
             memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
@@ -340,7 +393,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (false) {
+        if (is_variant_enabled(variants, " vectorized_allreduce ")) {
             AllreduceSummation ars(comm, regions[rank].size, AllreduceType::VECTORIZED_ALLREDUCE);
 
             memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));

@@ -18,7 +18,7 @@ using std::vector;
 
 class KGatherSummation : public Summation {
 public:
-  KGatherSummation(uint64_t rank, const vector<region> regions, uint64_t K = 1,
+  KGatherSummation(uint64_t rank, const vector<region> regions, uint64_t K = 1, bool allgather = false,
                    MPI_Comm comm = MPI_COMM_WORLD);
 
   virtual ~KGatherSummation();
@@ -36,6 +36,7 @@ protected:
   void linear_sum_k();
 
 private:
+  const bool allgather;
   const MPI_Comm comm;
   const int rank;
   const uint64_t k;

@@ -23,6 +23,7 @@ uint64_t env2m();
 const ReductionMode global_reduction_mode = env2mode();
 const uint64_t global_k = env2k();
 const uint64_t global_m = env2m();
+const bool global_allreduce = std::getenv("REPR_REDUCE_ALLREDUCE") != nullptr;
 
 std::string reduction_mode_to_string(ReductionMode rm) {
     switch (rm) {
@@ -42,7 +43,7 @@ std::string reduction_mode_to_string(ReductionMode rm) {
 }
 
 const std::string reduction_mode_string =
-        reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k) + ", M=" + std::to_string(global_m);
+        reduction_mode_to_string(global_reduction_mode) + " default K=" + std::to_string(global_k) + ", M=" + std::to_string(global_m) + ", ALLREDUCE=" + std::to_string(global_allreduce);
 
 void set_default_reduction_context_communicator(intptr_t communicator) {
     MPI_Comm comm = (MPI_Comm) (communicator);
@@ -145,13 +146,14 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
 
             MPI_Allgather(&r, sizeof(region), MPI_BYTE, &regions[0], sizeof(region), MPI_BYTE, comm);
 
-            return new KGatherSummation(rank, std::move(regions), k, comm);
+            return new KGatherSummation(rank, std::move(regions), k, global_allreduce, comm);
         }
         case ReductionMode::REPROBLAS: {
-            return new ReproblasSummation(comm, local_summands);
+            return new ReproblasSummation(comm, local_summands, global_allreduce);
         }
         case ReductionMode::ALLREDUCE: {
-            return new AllreduceSummation(comm, local_summands);
+            const auto type = global_allreduce ? AllreduceType::ALLREDUCE : AllreduceType::REDUCE_AND_BCAST;
+            return new AllreduceSummation(comm, local_summands, type);
         }
         default:
             throw new std::runtime_error("invalid reduction mode encountered");

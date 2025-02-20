@@ -17,8 +17,8 @@ using namespace std;
 using namespace std::string_literals;
 
 KGatherSummation::KGatherSummation(uint64_t rank, const vector<region> regions,
-                                   uint64_t k, MPI_Comm comm)
-    : comm(comm), rank(rank), k(k), chunked_array(rank, regions, k),
+                                   uint64_t k, bool allgather, MPI_Comm comm)
+    : allgather(allgather), comm(comm), rank(rank), k(k), chunked_array(rank, regions, k),
       regions(regions), send_counts(calc_send_counts()), displs(calc_displs()),
       k_recv_reqs(chunked_array.get_predecessors().size()),
       accumulation_buffer_offset_pre_k(k - chunked_array.get_left_remainder()),
@@ -34,7 +34,7 @@ KGatherSummation::KGatherSummation(uint64_t rank, const vector<region> regions,
     assert(c_size == regions.size());
   }
 
-  if (rank == 0) {
+  if (allgather || rank == 0) {
     auto desired_size = 0UL;
     for (const auto &kr : chunked_array.get_k_chunks()) {
       desired_size += kr.size;
@@ -222,18 +222,27 @@ double KGatherSummation::accumulate(void) {
     linear_sum_k();
   }
 
-  MPI_Gatherv(&accumulation_buffer[accumulation_buffer_offset_post_k],
-              send_counts[rank], MPI_DOUBLE, root_accumulation_buffer.data(),
-              send_counts.data(), displs.data(), MPI_DOUBLE, 0, comm);
+  if (allgather) {
+    MPI_Allgatherv(&accumulation_buffer[accumulation_buffer_offset_post_k],
+                send_counts[rank], MPI_DOUBLE, root_accumulation_buffer.data(),
+                send_counts.data(), displs.data(), MPI_DOUBLE, comm);
+
+  } else {
+    MPI_Gatherv(&accumulation_buffer[accumulation_buffer_offset_post_k],
+                send_counts[rank], MPI_DOUBLE, root_accumulation_buffer.data(),
+                send_counts.data(), displs.data(), MPI_DOUBLE, 0, comm);
+  }
 
   double result;
 
-  if (rank == 0) {
+  if (allgather || rank == 0) {
     result = std::accumulate(root_accumulation_buffer.begin(),
                              root_accumulation_buffer.end(), 0.0);
   }
 
-  MPI_Bcast(&result, 1, MPI_DOUBLE, 0, comm);
+  if (!allgather) {
+    MPI_Bcast(&result, 1, MPI_DOUBLE, 0, comm);
+  }
 
   ++reduction_counter;
 
