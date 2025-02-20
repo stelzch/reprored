@@ -317,6 +317,8 @@ int main(int argc, char **argv) {
 
             memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 
+            const auto repetitions = (config.n > 1000) ? 10 : config.r;
+
 #ifdef SCOREP
             SCOREP_USER_REGION_BEGIN(region_kgather, "kgather", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
@@ -324,7 +326,7 @@ int main(int argc, char **argv) {
                     [&kgs, &local_array, &distribution, &rank]() {
                         memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
                     },
-                    [&kgs]() { return kgs.accumulate(); }, config.r);
+                    [&kgs]() { return kgs.accumulate(); }, repetitions);
 #if SCOREP
             SCOREP_USER_REGION_END(region_kgather);
 #endif
@@ -341,6 +343,8 @@ int main(int argc, char **argv) {
 
             memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 
+            const auto repetitions = (config.n > 1000) ? 10 : config.r;
+
 #ifdef SCOREP
             SCOREP_USER_REGION_BEGIN(region_kgather, "kallgather", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
@@ -348,7 +352,7 @@ int main(int argc, char **argv) {
                     [&kgs, &local_array, &distribution, &rank]() {
                         memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
                     },
-                    [&kgs]() { return kgs.accumulate(); }, config.r);
+                    [&kgs]() { return kgs.accumulate(); }, repetitions);
 #if SCOREP
             SCOREP_USER_REGION_END(region_kgather);
 #endif
