@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
 #endif
         }
 
-        if (config.k > 1 && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
+        if (config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
             KGatherSummation kgs(rank, regions, config.k, comm);
 
             memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
