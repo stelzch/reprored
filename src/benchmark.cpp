@@ -1,3 +1,6 @@
+#include <cctype>
+#include <algorithm>
+#include <iostream>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -30,7 +33,7 @@ void print_usage(char *program_name) {
     fprintf(stderr,
             "Usage: %s n,p,k,r[,m] n,p,k,r,...\n\twhere\n\t\tn = length of "
             "array\n\t\tp = cluster size\n\t\tk = linear sum parameter\n\t\tr = "
-            "number of repetitions\n\t\tm = tree parameter\n",
+            "number of repetitions\n\t\tm = tree parameter\n\nUse - as first parameter to pass n,p,k,r tuples over stdin instead. Empty line starts benchmark.\n",
             program_name);
 }
 
@@ -41,6 +44,7 @@ struct TestConfig {
     uint64_t r;
     uint64_t m;
 
+    TestConfig() : n{0}, p{0}, k{0}, r{0}, m{0} {}
     TestConfig(uint64_t n, uint64_t p, uint64_t k, uint64_t r, uint64_t m = 2) :
         n{n}, p{p}, k{k}, r{r}, m{m} {}
 };
@@ -96,6 +100,38 @@ vector<TestConfig> collect_arguments(int argc, char **argv) {
 
     return configs;
 }
+vector<TestConfig> collect_arguments_stdin() {
+    vector<TestConfig> configs;
+    std::regex pattern(R"((\d+),(\d+),(\d+),(\d+)(?:,(\d+))?)");
+
+    // Read parameters from stdin
+    std::smatch match;
+
+    for (std::string line; std::getline(std::cin, line);) {
+
+        // If line is empty (apart from whitespace)
+        // end collection of arguments
+        if (std::all_of(line.begin(), line.end(), isspace)) {
+            break;
+        }
+
+        // Match regex multiple times per line.
+        // See https://stackoverflow.com/a/35026140
+        std::string::const_iterator search_start (line.begin());
+        while (std::regex_search(search_start, line.cend(), match, pattern)) {
+            const auto n = std::stoul(match[1].str());
+            const auto p = std::stoul(match[2].str());
+            const auto k = std::stoul(match[3].str());
+            const auto r = std::stoul(match[4].str());
+            const auto m = match[5].matched ? std::stoul(match[5].str()) : 2;
+
+            configs.emplace_back(n, p, k, r, m);
+            search_start = match.suffix().first;
+        }
+    }
+
+    return configs;
+}
 
 int main(int argc, char **argv) {
 #ifdef SCOREP
@@ -125,7 +161,24 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    const auto configs = collect_arguments(argc - 1, &argv[1]);
+    vector<TestConfig> configs;
+    if (std::strcmp(argv[1], "-") == 0) {
+        if (rank == 0) {
+            configs = collect_arguments_stdin();
+        }
+
+        // Only root rank can read from stdin.
+        // Broadcast test configuration to other ranks explicitly.
+        unsigned long long configs_size = configs.size();
+        MPI_Bcast(&configs_size, 1, MPI_UNSIGNED_LONG_LONG, 0, MPI_COMM_WORLD);
+
+        configs.resize(configs_size);
+
+        MPI_Bcast(configs.data(), configs_size * sizeof(TestConfig), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+    } else {
+        configs = collect_arguments(argc - 1, &argv[1]);
+    }
 
     const auto seed = 42;
 
