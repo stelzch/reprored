@@ -313,7 +313,7 @@ int main(int argc, char **argv) {
         }
 
         if (is_variant_enabled(variants, " kgather ") && config.n / config.k < MAX_MESSAGE_SIZE_DOUBLES) {
-            KGatherSummation kgs(rank, regions, config.k, comm);
+            KGatherSummation kgs(rank, regions, config.k, false, comm);
 
             memcpy(kgs.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 
