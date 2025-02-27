@@ -8,7 +8,7 @@
 using std::vector;
 
 
-enum class AllreduceType { REDUCE_AND_BCAST, ALLREDUCE, VECTORIZED_ALLREDUCE };
+enum class AllreduceType { REDUCE, REDUCE_AND_BCAST, ALLREDUCE, VECTORIZED_ALLREDUCE };
 
 class AllreduceSummation : public Summation {
 public:

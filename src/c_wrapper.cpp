@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include "summation.hpp"
 
 /* TODO: Remove global state. This is a crude hack. */
 MPI_Comm default_communicator = MPI_COMM_WORLD;
@@ -149,7 +150,7 @@ ReductionContext new_reduction_context_comm_k(int global_start_idx, int local_su
             return new KGatherSummation(rank, std::move(regions), k, global_allreduce, comm);
         }
         case ReductionMode::REPROBLAS: {
-            return new ReproblasSummation(comm, local_summands, global_allreduce);
+            return new ReproblasSummation(comm, local_summands, global_allreduce ? ReduceType::ALLREDUCE : ReduceType::REDUCE_BCAST);
         }
         case ReductionMode::ALLREDUCE: {
             const auto type = global_allreduce ? AllreduceType::ALLREDUCE : AllreduceType::REDUCE_AND_BCAST;

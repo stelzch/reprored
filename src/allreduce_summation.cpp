@@ -16,6 +16,12 @@ double *AllreduceSummation::getBuffer() { return buffer.data(); }
 double AllreduceSummation::accumulate() {
     double sum = 0, local_sum = 0;
     switch (type) {
+        case AllreduceType::REDUCE:
+            local_sum = std::reduce(buffer.begin(), buffer.end(), 0.0, std::plus<double>());
+
+            MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, comm);
+            break;
+
         case AllreduceType::REDUCE_AND_BCAST:
             local_sum = std::reduce(buffer.begin(), buffer.end(), 0.0, std::plus<double>());
 

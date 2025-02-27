@@ -13,6 +13,7 @@
 #include "allreduce_summation.hpp"
 #include "binary_tree_summation.h"
 #include "dual_tree_summation.hpp"
+#include "summation.hpp"
 
 #ifdef SCOREP
 #include <scorep/SCOREP_User.h>
@@ -144,9 +145,12 @@ int main(int argc, char **argv) {
     SCOREP_USER_REGION_DEFINE(region_benchmark_loop);
     SCOREP_USER_REGION_DEFINE(region_bts);
     SCOREP_USER_REGION_DEFINE(region_dts);
+    SCOREP_USER_REGION_DEFINE(region_dts_reduce);
     SCOREP_USER_REGION_DEFINE(region_kgather);
     SCOREP_USER_REGION_DEFINE(region_allreduce);
     SCOREP_USER_REGION_DEFINE(region_reproblas);
+    SCOREP_USER_REGION_DEFINE(region_reproblas_bcast);
+    SCOREP_USER_REGION_DEFINE(region_reproblas_reduce);
 #endif
     MPI_Init(&argc, &argv);
 
@@ -248,7 +252,7 @@ int main(int argc, char **argv) {
         }
         
         if (is_variant_enabled(variants, " reproblas ")) {
-            ReproblasSummation reproblas(comm, regions[rank].size, true);
+            ReproblasSummation reproblas(comm, regions[rank].size);
 
             memcpy(reproblas.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 #ifdef SCOREP
@@ -268,21 +272,41 @@ int main(int argc, char **argv) {
         }
 
         if (is_variant_enabled(variants, " reproblas_bcast ")) {
-            ReproblasSummation reproblas(comm, regions[rank].size, false);
+            ReproblasSummation reproblas(comm, regions[rank].size, ReduceType::REDUCE_BCAST);
 
             memcpy(reproblas.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
 #ifdef SCOREP
-            SCOREP_USER_REGION_BEGIN(region_reproblas, "reproblas", SCOREP_USER_REGION_TYPE_COMMON);
+            SCOREP_USER_REGION_BEGIN(region_reproblas_bcast, "reproblas_bcast", SCOREP_USER_REGION_TYPE_COMMON);
 #endif
 
             const auto results = measure([]() {}, [&reproblas]() { return reproblas.accumulate(); }, config.r);
 
 #ifdef SCOREP
-            SCOREP_USER_REGION_END(region_reproblas);
+            SCOREP_USER_REGION_END(region_reproblas_bcast);
 #endif
             if (rank == 0) {
                 for (const auto &result: results) {
                     print_result(config, result, "reproblas_bcast");
+                }
+            }
+        }
+
+        if (is_variant_enabled(variants, " reproblas_reduce ")) {
+            ReproblasSummation reproblas(comm, regions[rank].size, ReduceType::REDUCE);
+
+            memcpy(reproblas.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+#ifdef SCOREP
+            SCOREP_USER_REGION_BEGIN(region_reproblas_reduce, "reproblas_reduce", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+
+            const auto results = measure([]() {}, [&reproblas]() { return reproblas.accumulate(); }, config.r);
+
+#ifdef SCOREP
+            SCOREP_USER_REGION_END(region_reproblas_reduce);
+#endif
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "reproblas_reduce");
                 }
             }
         }
@@ -309,6 +333,31 @@ int main(int argc, char **argv) {
 
 #ifdef SCOREP
             SCOREP_USER_REGION_END(region_dts);
+#endif
+        }
+
+        if (is_variant_enabled(variants, " dts_reduce ")) {
+#ifdef SCOREP
+            SCOREP_USER_REGION_BEGIN(region_dts_reduce, "dualtreesummation_reduce", SCOREP_USER_REGION_TYPE_COMMON);
+#endif
+            DualTreeSummation dual_tree_summation(rank, regions, comm, config.m, ReduceType::REDUCE);
+
+            const auto results = measure(
+                    [&dual_tree_summation, &local_array, &distribution, &rank]() {
+                        memcpy(dual_tree_summation.getBuffer(), local_array.data(),
+                               distribution.send_counts[rank] * sizeof(double));
+                    },
+                    [&dual_tree_summation]() { return dual_tree_summation.accumulate(); }, config.r);
+
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "dts_reduce");
+                }
+            }
+
+
+#ifdef SCOREP
+            SCOREP_USER_REGION_END(region_dts_reduce);
 #endif
         }
 
@@ -393,6 +442,20 @@ int main(int argc, char **argv) {
             if (rank == 0) {
                 for (const auto &result: results) {
                     print_result(config, result, "allreduce");
+                }
+            }
+        }
+
+        if (is_variant_enabled(variants, " reduce ")) {
+            AllreduceSummation ars(comm, regions[rank].size, AllreduceType::REDUCE);
+
+            memcpy(ars.getBuffer(), local_array.data(), distribution.send_counts[rank] * sizeof(double));
+
+            const auto results = measure([]() {}, [&ars]() { return ars.accumulate(); }, config.r);
+
+            if (rank == 0) {
+                for (const auto &result: results) {
+                    print_result(config, result, "reduce");
                 }
             }
         }

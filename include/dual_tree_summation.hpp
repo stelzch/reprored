@@ -30,7 +30,7 @@ constexpr int TRANSFER_MSG_TAG = 20234;
 class DualTreeSummation : public Summation {
 public:
     DualTreeSummation(uint64_t rank, const vector<region> regions, MPI_Comm comm = MPI_COMM_WORLD,
-                      const unsigned int m = 2);
+                      const unsigned int m = 2, ReduceType type = ReduceType::REDUCE_BCAST);
 
 
     virtual ~DualTreeSummation();
@@ -91,6 +91,7 @@ private:
 
 
     const MPI_Comm comm;
+    const ReduceType reduce_type;
     const uint64_t comm_size;
     const uint64_t rank;
 

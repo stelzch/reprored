@@ -13,8 +13,9 @@
 
 
 DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions_, MPI_Comm comm,
-                                     const unsigned int m) :
+                                     const unsigned int m, ReduceType type) :
     comm{comm},
+    reduce_type{type},
     comm_size(regions_.size()),
     rank{rank},
     regions{compute_normalized_regions(regions_)},
@@ -24,6 +25,8 @@ DualTreeSummation::DualTreeSummation(uint64_t rank, const vector<region> regions
     rank_of_comm_parent(rank_to_array_order(rank) == 0 ? -1 : array_to_rank_order(topology.get_comm_parent())),
     is_root(rank_to_array_order(DualTreeSummation::rank) == 0),
     requests(topology.get_comm_children().size()) {
+
+    assert(reduce_type != ReduceType::ALLREDUCE); // Unsupported
 
     accumulation_buffer.resize(topology.get_local_size());
 
@@ -252,13 +255,15 @@ void DualTreeSummation::send_outgoing_values() const {
 }
 
 double DualTreeSummation::broadcast_result() const {
-    double result;
+    double result = 0.0;
     if (is_root) {
         assert(stack.size() == 1);
         result = stack.at(0);
     }
 
-    MPI_Bcast(&result, 1, MPI_DOUBLE, array_to_rank_order(0), comm);
+    if (reduce_type == ReduceType::REDUCE_BCAST) {
+        MPI_Bcast(&result, 1, MPI_DOUBLE, array_to_rank_order(0), comm);
+    }
     return result;
 }
 

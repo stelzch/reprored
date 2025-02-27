@@ -14,16 +14,17 @@ extern "C" {
 
 using std::vector;
 
+
 class ReproblasSummation : public Summation {
 public:
-  ReproblasSummation(MPI_Comm comm, size_t local_summands, bool allreduce = true);
+  ReproblasSummation(MPI_Comm comm, size_t local_summands, ReduceType type = ReduceType::ALLREDUCE);
   virtual ~ReproblasSummation();
 
   double *getBuffer() override;
   double accumulate() override;
 
 private:
-  bool allreduce;
+  ReduceType type;
   const size_t local_summands;
   int rank;
   MPI_Comm comm;
