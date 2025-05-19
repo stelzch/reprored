@@ -93,23 +93,18 @@ if (BUILD_TESTS)
     include(FetchContent)
     FetchContent_Declare(
             googletest
-            URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+            GIT_REPOSITORY https://github.com/google/googletest
+            GIT_TAG v1.17.0 # 52eb8108c5bdec04579160ae17225d66034bd723
+            GIT_SHALLOW true
     )
     # For Windows: Prevent overriding the parent project's compiler/linker settings
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
-    FetchContent_Declare(
-            kassert
-            GIT_REPOSITORY https://github.com/kamping-site/kassert
-            GIT_TAG f0873f85ff046c6dee35a85148a51bfab73af44a
-    )
-    FetchContent_MakeAvailable(kassert)
-
     add_executable(test test/main.cpp test/reproducibility_test.cpp test/chunked_array_test.cpp
             test/dual_tree_test.cpp
             test/m_ary_tree.cpp)
-    target_link_libraries(test GTest::gtest_main GTest::gmock MPI::MPI_CXX kassert binarytreesummation)
+    target_link_libraries(test GTest::gtest_main GTest::gmock MPI::MPI_CXX binarytreesummation)
 
     include(GoogleTest)
     gtest_discover_tests(test)

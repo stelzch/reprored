@@ -1,7 +1,6 @@
 #include <binary_tree_summation.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <kassert/kassert.hpp>
 #include <kgather_summation.hpp>
 #include <mpi.h>
 

@@ -15,6 +15,7 @@ ExternalProject_Add(
     URL ${REPROBLAS_URL}
     URL_HASH SHA256=${REPROBLAS_HASH}
     DOWNLOAD_NAME reproblas.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP false
     PATCH_COMMAND echo 'CFLAGS += -fPIC' >> config.mk &&
                   sed -i "s/CC = cc/CC = gcc/" config.mk && 
                   sed -i "s/BUILD_MPI = false/BUILD_MPI = true/" config.mk &&
