@@ -24,6 +24,7 @@ ExternalProject_Add(
     BUILD_COMMAND make -C <SOURCE_DIR>
     INSTALL_COMMAND make -C <SOURCE_DIR> BIN_DIR=<INSTALL_DIR>/bin LIB_DIR=<INSTALL_DIR>/lib INC_DIR=<INSTALL_DIR>/include DOC_DIR=<INSTALL_DIR>/doc install
     TEST_COMMAND make -C <SOURCE_DIR> check
+    TEST_EXCLUDE_FROM_MAIN true # only run ReproBLAS tests when requested
 )
 
 ExternalProject_Get_property(reproblas INSTALL_DIR)

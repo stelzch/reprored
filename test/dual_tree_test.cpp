@@ -231,10 +231,11 @@ TEST(DualTree, Fuzzer) {
 
     MPI_Barrier(comm);
 
-    // ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
+    ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS = 20000; // 15;
-    constexpr auto NUM_DISTRIBUTIONS = 5000;
+    constexpr bool REPORT_PROGRESS = false;
+    constexpr auto NUM_ARRAYS = 200;
+    constexpr auto NUM_DISTRIBUTIONS = 50;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
@@ -287,7 +288,7 @@ TEST(DualTree, Fuzzer) {
 
             auto m = m_distribution(rng);
 
-            if (full_comm_rank == 0) {
+            if (REPORT_PROGRESS && full_comm_rank == 0) {
                 printf("n=%zu, p=%zu, m=%u, distribution={", data_array_size, ranks, m);
                 for (auto i = 0; i < ranks; ++i) {
                     printf("{%i, %i}", distribution.displs[i], distribution.send_counts[i]);

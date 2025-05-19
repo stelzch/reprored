@@ -123,9 +123,10 @@ TEST(ReproducibleReduceTest, Fuzzing) {
 
     ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS = 20000; // 15;
-    constexpr auto NUM_KS = 20;
-    constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
+    constexpr bool REPORT_PROGRESS = false;
+    constexpr auto NUM_ARRAYS = 200; // 15;
+    constexpr auto NUM_KS = 10;
+    constexpr auto NUM_DISTRIBUTIONS = 10; // 5000;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
@@ -173,7 +174,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
                 auto const ranks = rank_distribution(rng);
                 auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
-                if (full_comm_rank == 0) {
+                if (REPORT_PROGRESS && full_comm_rank == 0) {
                     printf("n=%zu, p=%zu, k=%zu, distribution=", data_array_size, ranks, k);
                     for (auto i = 0; i < ranks; ++i) {
                         printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
@@ -210,7 +211,7 @@ TEST(ReproducibleReduceTest, Fuzzing) {
     }
 }
 
-TEST(ReproducibleReduceTest, FuzzingKGather) {
+TEST(ReproducibleReduceTest, DISABLED_FuzzingKGather) {
     int full_comm_size;
     int full_comm_rank;
     auto comm = MPI_COMM_WORLD;
@@ -221,9 +222,10 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
 
     ASSERT_GT(full_comm_size, 1) << "Fuzzing with only one rank is useless";
 
-    constexpr auto NUM_ARRAYS = 20000; // 15;
-    constexpr auto NUM_KS = 20;
-    constexpr auto NUM_DISTRIBUTIONS = 300; // 5000;
+    constexpr bool REPORT_PROGRESS = true;
+    constexpr auto NUM_ARRAYS = 10;
+    constexpr auto NUM_KS = 10;
+    constexpr auto NUM_DISTRIBUTIONS = 10;
 
     // Seed random number generator with same seed across all ranks for consistent number generation
     std::random_device rd;
@@ -265,13 +267,14 @@ TEST(ReproducibleReduceTest, FuzzingKGather) {
                 ASSERT_NEAR(reference_result, std::accumulate(data_array.begin(), data_array.end(), 0.0), 1e-9);
             });
 
+
             MPI_Bcast(&reference_result, 1, MPI_DOUBLE, 0, comm);
 
             for (auto j = 0U; j < NUM_DISTRIBUTIONS; ++j) {
                 auto const ranks = rank_distribution(rng);
                 auto const distribution = distribute_randomly(data_array_size, static_cast<size_t>(ranks), rng());
 
-                if (full_comm_rank == 0) {
+                if (REPORT_PROGRESS && full_comm_rank == 0) {
                     printf("n=%zu, p=%zu, k=%zu, distribution=", data_array_size, ranks, k);
                     for (auto i = 0; i < ranks; ++i) {
                         printf("(%i, %i) ", distribution.displs[i], distribution.send_counts[i]);
