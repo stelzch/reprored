@@ -17,7 +17,7 @@ ExternalProject_Add(
     DOWNLOAD_NAME reproblas.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP false
     PATCH_COMMAND echo 'CFLAGS += -fPIC' >> config.mk &&
-                  sed -i "s/CC = cc/CC = gcc/" config.mk && 
+                  sed -i "s/CC = cc/CC = mpicc/" config.mk &&
                   sed -i "s/BUILD_MPI = false/BUILD_MPI = true/" config.mk &&
                   patch --forward -p1 scripts/cogapp/cogapp.py < ${CMAKE_CURRENT_SOURCE_DIR}/reproblas-deprecated-imp.patch
     CONFIGURE_COMMAND make -C <SOURCE_DIR> update
