@@ -55,7 +55,7 @@ ReductionMode env2mode() {
     const char *mode_env = getenv("REPR_REDUCE");
 
     if (mode_env == nullptr) {
-        return ReductionMode::ALLREDUCE;
+        return ReductionMode::REPROBLAS;
     }
 
     const auto mode = std::string(mode_env);
