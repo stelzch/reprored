@@ -24,7 +24,7 @@ uint64_t env2m();
 const ReductionMode global_reduction_mode = env2mode();
 const uint64_t global_k = env2k();
 const uint64_t global_m = env2m();
-const bool global_allreduce = std::getenv("REPR_REDUCE_ALLREDUCE") != nullptr;
+const bool global_allreduce = std::getenv("REPR_REDUCE_TWOPHASE") == nullptr;
 
 std::string reduction_mode_to_string(ReductionMode rm) {
     switch (rm) {
