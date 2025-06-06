@@ -101,7 +101,7 @@ TEST(ReproducibleReduceTest, OtherExample) {
     const auto K = 3;
 
     with_comm_size_n(full_comm, 4, [&distribution, &array, &K](auto comm, auto rank, auto _) {
-        BinaryTreeSummation bts(rank, regions_from_distribution(distribution), K);
+        BinaryTreeSummation bts(rank, regions_from_distribution(distribution), K, comm);
 
         auto local_array = scatter_array(comm, array, distribution);
         memcpy(bts.getBuffer(), local_array.data(), local_array.size() * sizeof(double));
