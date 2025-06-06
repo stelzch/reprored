@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software in an academic context, please cite our paper."
+authors:
+  - family-names: Stelz
+    given-names: Christoph
+    orcid: https://orcid.org/0009-0004-7980-1202
+  - family-names: Hübner
+    given-names: Lukas
+    orcid: https://orcid.org/0000-0001-9213-7597
+  - family-names: Stamatakis
+    given-names: Alexandros
+    orcid: https://orcid.org/0000-0003-0353-0691
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.15004917
+preferred-citation:
+  type: article
+  doi: 10.1101/2025.06.02.656320
+  url: https://www.biorxiv.org/content/10.1101/2025.06.02.656320
+  year: 2025
+  title: Bit-Reproducible Phylogenetic Tree Inference under Varying Core-Counts via Reproducible Parallel Reduction Operators
+  journal: bioRxiv
+  authors:
+    - family-names: Stelz
+      given-names: Christoph
+      orcid: https://orcid.org/0009-0004-7980-1202
+    - family-names: Hübner
+      given-names: Lukas
+      orcid: https://orcid.org/0000-0001-9213-7597
+    - family-names: Stamatakis
+      given-names: Alexandros
+      orcid: https://orcid.org/0000-0003-0353-0691
