@@ -19,7 +19,7 @@ ExternalProject_Add(
     PATCH_COMMAND echo 'CFLAGS += -fPIC' >> config.mk &&
                   sed -i "s/CC = cc/CC = mpicc/" config.mk &&
                   sed -i "s/BUILD_MPI = false/BUILD_MPI = true/" config.mk &&
-                  patch --forward -p1 scripts/cogapp/cogapp.py < ${CMAKE_CURRENT_SOURCE_DIR}/reproblas-deprecated-imp.patch
+                  (patch --forward -p1 scripts/cogapp/cogapp.py < ${CMAKE_CURRENT_SOURCE_DIR}/reproblas-deprecated-imp.patch || true)
     CONFIGURE_COMMAND make -C <SOURCE_DIR> update
     BUILD_COMMAND make -C <SOURCE_DIR>
     INSTALL_COMMAND make -C <SOURCE_DIR> BIN_DIR=<INSTALL_DIR>/bin LIB_DIR=<INSTALL_DIR>/lib INC_DIR=<INSTALL_DIR>/include DOC_DIR=<INSTALL_DIR>/doc install
