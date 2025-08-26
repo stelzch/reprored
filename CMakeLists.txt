@@ -32,7 +32,7 @@ target_sources(reprored
         PRIVATE ${WRAPPER_SRC}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/binary_tree_summation.h>)
 
-target_compile_options(reprored PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic)
+target_compile_options(reprored PRIVATE -Wall $<$<CONFIG:RELEASE>:-O3> -ggdb -mavx -mavx2 -Wextra -pedantic -march=native)
 
 target_compile_definitions(reprored PRIVATE $<$<CONFIG:DEBUG>:DEBUG_TRACE>)
 
