@@ -1,3 +1,10 @@
+![Logo of ReproRed](./docs/images/logo.svg)
+
+
+
+[![DOI](https://zenodo.org/badge/549016550.svg)](https://doi.org/10.5281/zenodo.15004917)
+
+
 # ReproRed
 
 This repository contains the code for multiple reproducible reduction algorithms.
